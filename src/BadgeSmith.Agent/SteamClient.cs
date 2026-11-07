@@ -7,6 +7,7 @@ internal sealed unsafe class SteamClient : IDisposable
     private static readonly string[] ClientVersions = ["SteamClient021", "SteamClient020", "SteamClient019", "SteamClient018", "SteamClient017"];
     private static readonly string[] UserVersions = ["SteamUser023", "SteamUser022", "SteamUser021", "SteamUser020"];
     private static readonly string[] UtilsVersions = ["SteamUtils010"];
+    private static readonly string[] UserStatsVersions = ["STEAMUSERSTATS_INTERFACE_VERSION012"];
 
     private readonly IntPtr _library;
     private readonly IntPtr _client;
@@ -87,6 +88,13 @@ internal sealed unsafe class SteamClient : IDisposable
 
         var utilsVtable = *(IntPtr**)utils;
         return ((delegate* unmanaged<IntPtr, uint>)utilsVtable[9])(utils);
+    }
+
+    public SteamUserStats? GetUserStats()
+    {
+        var stats = GetInterface(UserStatsVersions, name =>
+            ((delegate* unmanaged<IntPtr, int, int, byte*, IntPtr>)_clientVtable[13])(_client, _user, _pipe, (byte*)name));
+        return stats == IntPtr.Zero ? null : new SteamUserStats(stats, new SteamCallbacks(_library, _pipe));
     }
 
     private static IntPtr GetInterface(string[] versions, Func<IntPtr, IntPtr> get)
