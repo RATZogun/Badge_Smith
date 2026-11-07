@@ -10,6 +10,8 @@ public abstract record FarmEvent
 
     public sealed record ScanFailed(Exception Error, TimeSpan RetryIn) : FarmEvent;
 
+    public sealed record SteamUnavailable(string Reason, TimeSpan RetryIn) : FarmEvent;
+
     public sealed record Finished(IReadOnlyCollection<uint> Skipped) : FarmEvent;
 }
 
@@ -18,12 +20,10 @@ public sealed class FarmRunner(
     IAgentLauncher launcher,
     FarmOptions options)
 {
-    private static readonly TimeSpan MinScanRetry = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan MaxScanRetry = TimeSpan.FromMinutes(5);
-
     public async Task RunAsync(Action<FarmEvent> onEvent, CancellationToken cancellationToken)
     {
-        var retry = MinScanRetry;
+        var scanRetry = options.MinRetry;
+        var steamRetry = options.MinRetry;
         var skipped = new HashSet<uint>();
         try
         {
@@ -33,13 +33,13 @@ public sealed class FarmRunner(
                 try
                 {
                     badges = await scan(cancellationToken);
-                    retry = MinScanRetry;
+                    scanRetry = options.MinRetry;
                 }
                 catch (Exception error) when (error is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
                 {
-                    onEvent(new FarmEvent.ScanFailed(error, retry));
-                    await Task.Delay(retry, cancellationToken);
-                    retry = TimeSpan.FromTicks(Math.Min(retry.Ticks * 2, MaxScanRetry.Ticks));
+                    onEvent(new FarmEvent.ScanFailed(error, scanRetry));
+                    await Task.Delay(scanRetry, cancellationToken);
+                    scanRetry = Next(scanRetry);
                     continue;
                 }
 
@@ -66,8 +66,18 @@ public sealed class FarmRunner(
                         onEvent(new FarmEvent.GameSkipped(appId, reason));
                     }
                 }
-                while (result.Started.Count == 0);
+                while (result.Started.Count == 0 && result.SteamUnavailable is null);
 
+                if (result.SteamUnavailable is { } unavailable)
+                {
+                    await launcher.StopAllAsync();
+                    onEvent(new FarmEvent.SteamUnavailable(unavailable, steamRetry));
+                    await Task.Delay(steamRetry, cancellationToken);
+                    steamRetry = Next(steamRetry);
+                    continue;
+                }
+
+                steamRetry = options.MinRetry;
                 onEvent(new FarmEvent.Farming(step, result.Started));
                 try
                 {
@@ -83,4 +93,6 @@ public sealed class FarmRunner(
         {
         }
     }
+
+    private TimeSpan Next(TimeSpan retry) => TimeSpan.FromTicks(Math.Min(retry.Ticks * 2, options.MaxRetry.Ticks));
 }

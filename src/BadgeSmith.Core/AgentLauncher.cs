@@ -52,17 +52,27 @@ public sealed class AgentLauncher(string agentPath) : IAgentLauncher, IAsyncDisp
             }
 
             process.BeginErrorReadLine();
-            if (await WaitReadyAsync(process, cancellationToken))
+            var outcome = await WaitReadyAsync(process, cancellationToken);
+            if (outcome == ReadyOutcome.Ready)
             {
                 _running.Add(process);
                 started.Add(appId);
                 continue;
             }
 
-            var exited = process.HasExited;
+            var exited = outcome == ReadyOutcome.Exited;
+            int? exitCode = null;
             if (exited)
             {
-                await process.WaitForExitAsync(CancellationToken.None);
+                using var exitTimeout = new CancellationTokenSource(StopTimeout);
+                try
+                {
+                    await process.WaitForExitAsync(exitTimeout.Token);
+                    exitCode = process.ExitCode;
+                }
+                catch (OperationCanceledException)
+                {
+                }
             }
 
             await StopAsync(process);
@@ -72,6 +82,12 @@ public sealed class AgentLauncher(string agentPath) : IAgentLauncher, IAsyncDisp
                 reason = errors.Count > 0
                     ? string.Join(" ", errors)
                     : exited ? "o agente encerrou sem responder" : $"o agente não respondeu em {ReadyTimeout.TotalSeconds:0} s";
+            }
+
+            if (exitCode is { } code && AgentExitCodes.IsSteamUnavailable(code))
+            {
+                RunningAppIds = started;
+                return new AgentStartResult(started, failed, reason);
             }
 
             failed[appId] = reason;
@@ -90,7 +106,14 @@ public sealed class AgentLauncher(string agentPath) : IAgentLauncher, IAsyncDisp
 
     public ValueTask DisposeAsync() => new(StopAllAsync());
 
-    private static async Task<bool> WaitReadyAsync(Process process, CancellationToken cancellationToken)
+    private enum ReadyOutcome
+    {
+        Ready,
+        Exited,
+        TimedOut,
+    }
+
+    private static async Task<ReadyOutcome> WaitReadyAsync(Process process, CancellationToken cancellationToken)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(ReadyTimeout);
@@ -100,15 +123,16 @@ public sealed class AgentLauncher(string agentPath) : IAgentLauncher, IAsyncDisp
             {
                 if (line.StartsWith("READY ", StringComparison.Ordinal))
                 {
-                    return true;
+                    return ReadyOutcome.Ready;
                 }
             }
+
+            return ReadyOutcome.Exited;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
+            return ReadyOutcome.TimedOut;
         }
-
-        return false;
     }
 
     private static async Task StopAsync(Process process)

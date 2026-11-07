@@ -77,6 +77,7 @@ void Report(FarmEvent e)
         FarmEvent.Scanned s => $"[{now}] {s.GamesWithDrops} jogo(s), {s.TotalDrops} carta(s) a dropar",
         FarmEvent.Farming f => $"[{now}] {f.Step.Mode}: {string.Join(", ", f.Step.Games.Where(g => f.Started.Contains(g.AppId)).Select(g => g.Name))} por {f.Step.Duration.TotalMinutes:0} min",
         FarmEvent.GameSkipped s => $"[{now}] Jogo {s.AppId} ignorado nesta sessão: {s.Reason}",
+        FarmEvent.SteamUnavailable s => $"[{now}] Steam indisponível ({s.Reason}); farm pausado, nova tentativa em {s.RetryIn.TotalSeconds:0} s",
         FarmEvent.ScanFailed s => $"[{now}] Falha ao ler as badges ({s.Error.Message}); nova tentativa em {s.RetryIn.TotalSeconds:0} s",
         FarmEvent.Finished { Skipped.Count: 0 } => $"[{now}] Todas as cartas foram dropadas.",
         FarmEvent.Finished f => $"[{now}] Fim: {f.Skipped.Count} jogo(s) ignorado(s) por falha do agente ainda têm cartas.",

@@ -9,7 +9,34 @@ public class FarmRunnerTests
         SoloDuration = TimeSpan.FromMilliseconds(10),
         LastDropDuration = TimeSpan.FromMilliseconds(10),
         BatchDuration = TimeSpan.FromMilliseconds(10),
+        MinRetry = TimeSpan.FromMilliseconds(10),
+        MaxRetry = TimeSpan.FromMilliseconds(20),
     };
+
+    [Fact]
+    public async Task PausesWithoutSkippingGamesWhileSteamIsUnavailable()
+    {
+        var scans = new Queue<IReadOnlyList<Badge>>(
+        [
+            [new Badge(1, "A", 2, 5)],
+            [new Badge(1, "A", 2, 5)],
+            [new Badge(1, "A", 0, 5)],
+        ]);
+        var launcher = new SteamDownLauncher(unavailableAttempts: 1);
+        var events = new List<FarmEvent>();
+
+        await RunWithTimeout(new FarmRunner(_ => Task.FromResult(scans.Dequeue()), launcher, Options), events);
+
+        Assert.Collection(
+            events,
+            e => Assert.IsType<FarmEvent.Scanned>(e),
+            e => Assert.IsType<FarmEvent.SteamUnavailable>(e),
+            e => Assert.IsType<FarmEvent.Scanned>(e),
+            e => Assert.Equal([1u], Assert.IsType<FarmEvent.Farming>(e).Started),
+            e => Assert.IsType<FarmEvent.Scanned>(e),
+            e => Assert.Empty(Assert.IsType<FarmEvent.Finished>(e).Skipped));
+        Assert.Empty(scans);
+    }
 
     [Fact]
     public async Task SkipsAGameWhoseAgentFailsAndKeepsFarmingTheOthers()
@@ -55,6 +82,21 @@ public class FarmRunnerTests
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         await runner.RunAsync(events.Add, timeout.Token);
         Assert.False(timeout.IsCancellationRequested, "O loop não terminou sozinho.");
+    }
+
+    private sealed class SteamDownLauncher(int unavailableAttempts) : IAgentLauncher
+    {
+        private int _attempts;
+
+        public Task<AgentStartResult> StartAsync(IEnumerable<uint> appIds, CancellationToken cancellationToken)
+        {
+            var ids = appIds.ToList();
+            return Task.FromResult(_attempts++ < unavailableAttempts
+                ? new AgentStartResult([], new Dictionary<uint, string>(), "a Steam está fechada")
+                : new AgentStartResult(ids, new Dictionary<uint, string>()));
+        }
+
+        public Task StopAllAsync() => Task.CompletedTask;
     }
 
     private sealed class FakeLauncher(uint? failing = null) : IAgentLauncher
