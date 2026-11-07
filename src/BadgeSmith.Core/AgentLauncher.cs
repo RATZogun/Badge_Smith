@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace BadgeSmith.Core;
 
-public sealed class AgentLauncher(string agentPath) : IAsyncDisposable
+public sealed class AgentLauncher(string agentPath) : IAgentLauncher, IAsyncDisposable
 {
     private static readonly TimeSpan ReadyTimeout = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(5);
@@ -11,33 +11,74 @@ public sealed class AgentLauncher(string agentPath) : IAsyncDisposable
 
     public IReadOnlyCollection<uint> RunningAppIds { get; private set; } = [];
 
-    public async Task<IReadOnlyList<uint>> StartAsync(IEnumerable<uint> appIds, CancellationToken cancellationToken)
+    public async Task<AgentStartResult> StartAsync(IEnumerable<uint> appIds, CancellationToken cancellationToken)
     {
         var started = new List<uint>();
+        var failed = new Dictionary<uint, string>();
         foreach (var appId in appIds)
         {
-            var process = Process.Start(new ProcessStartInfo(agentPath)
+            var errors = new List<string>();
+            var process = new Process
             {
-                ArgumentList = { appId.ToString(), "--parent-pid", Environment.ProcessId.ToString(), "--stdin-control" },
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-            }) ?? throw new InvalidOperationException($"Não foi possível iniciar o agente para {appId}.");
+                StartInfo = new ProcessStartInfo(agentPath)
+                {
+                    ArgumentList = { appId.ToString(), "--parent-pid", Environment.ProcessId.ToString(), "--stdin-control" },
+                    RedirectStandardInput = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                },
+            };
+            process.ErrorDataReceived += (_, e) =>
+            {
+                if (!string.IsNullOrWhiteSpace(e.Data))
+                {
+                    lock (errors)
+                    {
+                        errors.Add(e.Data.Trim());
+                    }
+                }
+            };
 
+            try
+            {
+                process.Start();
+            }
+            catch (Exception error) when (error is System.ComponentModel.Win32Exception or InvalidOperationException)
+            {
+                process.Dispose();
+                failed[appId] = $"o agente não pôde ser iniciado ({error.Message})";
+                continue;
+            }
+
+            process.BeginErrorReadLine();
             if (await WaitReadyAsync(process, cancellationToken))
             {
                 _running.Add(process);
                 started.Add(appId);
+                continue;
             }
-            else
+
+            var exited = process.HasExited;
+            if (exited)
             {
-                await StopAsync(process);
+                await process.WaitForExitAsync(CancellationToken.None);
             }
+
+            await StopAsync(process);
+            string reason;
+            lock (errors)
+            {
+                reason = errors.Count > 0
+                    ? string.Join(" ", errors)
+                    : exited ? "o agente encerrou sem responder" : $"o agente não respondeu em {ReadyTimeout.TotalSeconds:0} s";
+            }
+
+            failed[appId] = reason;
         }
 
         RunningAppIds = started;
-        return started;
+        return new AgentStartResult(started, failed);
     }
 
     public async Task StopAllAsync()
