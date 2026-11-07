@@ -9,4 +9,8 @@
     <RootNamespace>BadgeSmith.Agent</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\BadgeSmith.Core\BadgeSmith.Core.csproj" />
+  </ItemGroup>
+
 </Project>

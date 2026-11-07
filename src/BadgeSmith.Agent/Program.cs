@@ -1,11 +1,12 @@
 ﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using BadgeSmith.Agent;
+using BadgeSmith.Core;
 
 if (args.Length < 1 || !uint.TryParse(args[0], out var appId) || appId == 0)
 {
     Console.Error.WriteLine("Uso: BadgeSmith.Agent <appId> [--seconds N] [--parent-pid PID] [--stdin-control]");
-    return 2;
+    return (int)AgentExitCode.InvalidArguments;
 }
 
 int? seconds = null;
@@ -33,41 +34,52 @@ var libraryPath = SteamClientLibrary.FindPath();
 if (libraryPath is null)
 {
     Console.Error.WriteLine("ERRO steamclient não encontrado: a Steam está instalada?");
-    return 3;
+    return (int)AgentExitCode.SteamNotInstalled;
 }
 
 NativeEnvironment.Set("SteamAppId", appId.ToString());
 NativeEnvironment.Set("SteamGameId", appId.ToString());
 
-using var client = SteamClient.Open(libraryPath);
+SteamClient opened;
+try
+{
+    opened = SteamClient.Open(libraryPath);
+}
+catch (InvalidOperationException error)
+{
+    Console.Error.WriteLine($"ERRO {error.Message}");
+    return (int)AgentExitCode.UnsupportedSteam;
+}
+
+using var client = opened;
 
 if (!client.Connect())
 {
     Console.Error.WriteLine("ERRO não foi possível conectar ao usuário da Steam: a Steam está aberta e logada?");
-    return 4;
+    return (int)AgentExitCode.SteamNotRunning;
 }
 
 switch (client.IsLoggedOn())
 {
     case null:
         Console.Error.WriteLine($"ERRO versão da interface SteamUser não suportada por esta Steam ({client.Version}).");
-        return 7;
+        return (int)AgentExitCode.UnsupportedSteam;
     case false:
         Console.Error.WriteLine("ERRO a Steam não está logada.");
-        return 5;
+        return (int)AgentExitCode.SteamNotLoggedOn;
 }
 
 var steamAppId = client.GetAppId();
 if (steamAppId is null)
 {
     Console.Error.WriteLine($"ERRO versão da interface SteamUtils não suportada por esta Steam ({client.Version}).");
-    return 7;
+    return (int)AgentExitCode.UnsupportedSteam;
 }
 
 if (steamAppId != appId)
 {
     Console.Error.WriteLine($"ERRO a Steam registrou o appId {steamAppId} em vez de {appId}.");
-    return 6;
+    return (int)AgentExitCode.WrongAppId;
 }
 
 using var cancel = seconds is { } limit ? new CancellationTokenSource(TimeSpan.FromSeconds(limit)) : new CancellationTokenSource();
@@ -126,7 +138,7 @@ catch (OperationCanceledException)
 }
 
 Console.WriteLine($"STOPPED {appId}");
-return 0;
+return (int)AgentExitCode.Stopped;
 
 static bool IsRunning(int pid)
 {
