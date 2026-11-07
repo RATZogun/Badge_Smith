@@ -5,7 +5,7 @@ namespace BadgeSmith.Tests;
 public class BadgePageParserTests
 {
     private const string Html = """
-        <html><body>
+        <html><head><script>g_steamID = "76561198000000001";</script></head><body>
         <div class="profile_xp_block"></div>
         <div class="badges_sheet">
           <div class="badge_row is_link">
@@ -33,17 +33,22 @@ public class BadgePageParserTests
             <div class="badge_title_stats_drops"><span class="progress_info_bold">No card drops remaining</span></div>
             <div class="badge_title">A Short Hike</div>
           </div>
+          <div class="badge_row is_link">
+            <a class="badge_row_overlay" href="https://steamcommunity.com/id/x/gamecards/979070/"></a>
+            <div class="badge_title_stats_playtime">0.3 hrs on record</div>
+            <div class="badge_title">Just Die Already</div>
+          </div>
         </div>
         <div class="pageLinks"><a class="pagelink" href="?p=2">2</a><a class="pagelink" href="?p=3">3</a></div>
         </body></html>
         """;
 
     [Fact]
-    public void ReadsGamesWithRemainingDrops()
+    public void ReadsGamesAndTheirRemainingDrops()
     {
         var page = BadgePageParser.Parse(Html);
 
-        Assert.True(page.IsSignedIn);
+        Assert.Equal(76561198000000001ul, page.SignedInSteamId);
         Assert.Equal(3, page.PageCount);
         Assert.Collection(
             page.Badges,
@@ -59,15 +64,44 @@ public class BadgePageParserTests
                 Assert.Equal(5257350u, b.AppId);
                 Assert.Equal(1, b.RemainingDrops);
                 Assert.Equal(0, b.HoursPlayed);
+            },
+            b =>
+            {
+                Assert.Equal(1055540u, b.AppId);
+                Assert.Equal(0, b.RemainingDrops);
             });
     }
 
     [Fact]
-    public void DetectsSignedOutPage()
+    public void ListsPlayedGamesWithoutDropInfo()
     {
-        var page = BadgePageParser.Parse("<html><body><div class=\"login_area\"></div></body></html>");
+        var page = BadgePageParser.Parse(Html);
 
-        Assert.False(page.IsSignedIn);
+        var badge = Assert.Single(page.WithoutDropInfo);
+        Assert.Equal(979070u, badge.AppId);
+        Assert.Equal(0.3, badge.HoursPlayed);
+    }
+
+    [Fact]
+    public void TreatsPublicPageWithoutSessionAsSignedOut()
+    {
+        var page = BadgePageParser.Parse("""
+            <html><head><script>g_steamID = false;</script></head><body>
+            <div class="profile_xp_block"></div><div class="badges_sheet"></div>
+            </body></html>
+            """);
+
+        Assert.Null(page.SignedInSteamId);
         Assert.Empty(page.Badges);
+    }
+
+    [Theory]
+    [InlineData("You can get 4 more trading cards. 4 card drops remaining", 4)]
+    [InlineData("1 card drop remaining", 1)]
+    [InlineData("No card drops remaining", 0)]
+    [InlineData("nothing here", null)]
+    public void ReadsRemainingDropsFromText(string text, int? expected)
+    {
+        Assert.Equal(expected, BadgePageParser.ParseRemainingDrops(text));
     }
 }
