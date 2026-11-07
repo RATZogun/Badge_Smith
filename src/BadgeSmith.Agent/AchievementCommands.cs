@@ -15,6 +15,12 @@ internal static class AchievementCommands
 
     public static int Run(SteamClient client, uint appId, string action, IReadOnlyList<string> apiNames, string language)
     {
+        if (action is "unlock" or "lock" && apiNames.Count == 0)
+        {
+            Console.Error.WriteLine($"ERRO informe ao menos uma conquista para {action}.");
+            return (int)AgentExitCode.InvalidArguments;
+        }
+
         var stats = client.GetUserStats();
         if (stats is null)
         {
@@ -63,7 +69,7 @@ internal static class AchievementCommands
     private static int Change(SteamUserStats stats, uint appId, IReadOnlyList<AchievementDefinition> schema, IReadOnlyList<string> apiNames, bool unlock)
     {
         var byName = schema.ToDictionary(a => a.ApiName, StringComparer.Ordinal);
-        var changed = false;
+        var results = new List<(string Api, string? Error)>();
         foreach (var apiName in apiNames)
         {
             string? error = null;
@@ -79,15 +85,18 @@ internal static class AchievementCommands
             {
                 error = "a Steam recusou a alteração";
             }
-            else
-            {
-                changed = true;
-            }
 
-            Write(new { api = apiName, ok = error is null, error });
+            results.Add((apiName, error));
         }
 
-        if (changed && !stats.Store(appId))
+        var stored = !results.Any(r => r.Error is null) || stats.Store(appId);
+        foreach (var (api, error) in results)
+        {
+            var finalError = error ?? (stored ? null : "a Steam não confirmou a gravação");
+            Write(new { api, ok = finalError is null, error = finalError });
+        }
+
+        if (!stored)
         {
             Console.Error.WriteLine("ERRO a Steam não confirmou a gravação das conquistas.");
             return (int)AgentExitCode.StoreFailed;
