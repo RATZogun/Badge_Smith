@@ -47,13 +47,23 @@ if (!client.Connect())
     return 4;
 }
 
-if (!client.IsLoggedOn())
+switch (client.IsLoggedOn())
 {
-    Console.Error.WriteLine("ERRO a Steam não está logada.");
-    return 5;
+    case null:
+        Console.Error.WriteLine($"ERRO versão da interface SteamUser não suportada por esta Steam ({client.Version}).");
+        return 7;
+    case false:
+        Console.Error.WriteLine("ERRO a Steam não está logada.");
+        return 5;
 }
 
 var steamAppId = client.GetAppId();
+if (steamAppId is null)
+{
+    Console.Error.WriteLine($"ERRO versão da interface SteamUtils não suportada por esta Steam ({client.Version}).");
+    return 7;
+}
+
 if (steamAppId != appId)
 {
     Console.Error.WriteLine($"ERRO a Steam registrou o appId {steamAppId} em vez de {appId}.");

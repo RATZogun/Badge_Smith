@@ -5,8 +5,8 @@ namespace BadgeSmith.Agent;
 internal sealed unsafe class SteamClient : IDisposable
 {
     private static readonly string[] ClientVersions = ["SteamClient021", "SteamClient020", "SteamClient019", "SteamClient018", "SteamClient017"];
-    private const string UserVersion = "SteamUser021";
-    private const string UtilsVersion = "SteamUtils010";
+    private static readonly string[] UserVersions = ["SteamUser023", "SteamUser022", "SteamUser021", "SteamUser020"];
+    private static readonly string[] UtilsVersions = ["SteamUtils010"];
 
     private readonly IntPtr _library;
     private readonly IntPtr _client;
@@ -63,44 +63,52 @@ internal sealed unsafe class SteamClient : IDisposable
         return _user != 0;
     }
 
-    public bool IsLoggedOn()
+    public bool? IsLoggedOn()
     {
-        var name = Marshal.StringToHGlobalAnsi(UserVersion);
-        try
+        var user = GetInterface(UserVersions, name =>
+            ((delegate* unmanaged<IntPtr, int, int, byte*, IntPtr>)_clientVtable[5])(_client, _user, _pipe, (byte*)name));
+        if (user == IntPtr.Zero)
         {
-            var user = ((delegate* unmanaged<IntPtr, int, int, byte*, IntPtr>)_clientVtable[5])(_client, _user, _pipe, (byte*)name);
-            if (user == IntPtr.Zero)
-            {
-                return false;
-            }
+            return null;
+        }
 
-            var userVtable = *(IntPtr**)user;
-            return ((delegate* unmanaged<IntPtr, byte>)userVtable[1])(user) != 0;
-        }
-        finally
-        {
-            Marshal.FreeHGlobal(name);
-        }
+        var userVtable = *(IntPtr**)user;
+        return ((delegate* unmanaged<IntPtr, byte>)userVtable[1])(user) != 0;
     }
 
-    public uint GetAppId()
+    public uint? GetAppId()
     {
-        var name = Marshal.StringToHGlobalAnsi(UtilsVersion);
-        try
+        var utils = GetInterface(UtilsVersions, name =>
+            ((delegate* unmanaged<IntPtr, int, byte*, IntPtr>)_clientVtable[9])(_client, _pipe, (byte*)name));
+        if (utils == IntPtr.Zero)
         {
-            var utils = ((delegate* unmanaged<IntPtr, int, byte*, IntPtr>)_clientVtable[9])(_client, _pipe, (byte*)name);
-            if (utils == IntPtr.Zero)
-            {
-                return 0;
-            }
+            return null;
+        }
 
-            var utilsVtable = *(IntPtr**)utils;
-            return ((delegate* unmanaged<IntPtr, uint>)utilsVtable[9])(utils);
-        }
-        finally
+        var utilsVtable = *(IntPtr**)utils;
+        return ((delegate* unmanaged<IntPtr, uint>)utilsVtable[9])(utils);
+    }
+
+    private static IntPtr GetInterface(string[] versions, Func<IntPtr, IntPtr> get)
+    {
+        foreach (var version in versions)
         {
-            Marshal.FreeHGlobal(name);
+            var name = Marshal.StringToHGlobalAnsi(version);
+            try
+            {
+                var found = get(name);
+                if (found != IntPtr.Zero)
+                {
+                    return found;
+                }
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(name);
+            }
         }
+
+        return IntPtr.Zero;
     }
 
     public void Dispose()
