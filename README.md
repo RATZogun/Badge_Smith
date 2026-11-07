@@ -58,7 +58,7 @@ Fluxo de branches:
 Badge_Smith/
 ├── src/
 │   ├── BadgeSmith.Agent/    # processo auxiliar por jogo: joga o appId e lê ou grava as conquistas
-│   ├── BadgeSmith.Core/     # fila de farm, controle dos agentes e leitura do schema de conquistas
+│   ├── BadgeSmith.Core/     # fila de farm, controle dos agentes e serviço de conquistas
 │   ├── BadgeSmith.Steam/    # sessão web e leitura da página de badges
 │   └── BadgeSmith.Cli/      # linha de comando provisória (scan e farm)
 └── tests/BadgeSmith.Tests/  # testes do farm, da leitura das badges e do schema de conquistas
