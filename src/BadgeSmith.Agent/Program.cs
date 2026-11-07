@@ -78,6 +78,12 @@ using var client = opened;
 
 if (!client.Connect())
 {
+    if (SteamInstall.IsRunning())
+    {
+        Console.Error.WriteLine($"ERRO a Steam recusou o jogo {appId}: ele não está disponível para esta conta.");
+        return (int)AgentExitCode.GameNotAvailable;
+    }
+
     Console.Error.WriteLine("ERRO não foi possível conectar ao usuário da Steam: a Steam está aberta e logada?");
     return (int)AgentExitCode.SteamNotRunning;
 }
