@@ -6,6 +6,8 @@ public sealed class AgentLauncher(string agentPath) : IAgentLauncher, IAsyncDisp
 {
     private static readonly TimeSpan ReadyTimeout = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(20);
+    private const uint ProbeAppId = 480;
 
     private readonly List<Process> _running = [];
 
@@ -15,6 +17,7 @@ public sealed class AgentLauncher(string agentPath) : IAgentLauncher, IAsyncDisp
     {
         var started = new List<uint>();
         var failed = new Dictionary<uint, string>();
+        var steamLoggedIn = false;
         foreach (var appId in appIds)
         {
             var errors = new List<string>();
@@ -90,6 +93,16 @@ public sealed class AgentLauncher(string agentPath) : IAgentLauncher, IAsyncDisp
                 return new AgentStartResult(started, failed, reason);
             }
 
+            if (exitCode == (int)AgentExitCode.GameNotAvailable && started.Count == 0 && !steamLoggedIn)
+            {
+                steamLoggedIn = await ProbeSteamAsync(cancellationToken);
+                if (!steamLoggedIn)
+                {
+                    RunningAppIds = started;
+                    return new AgentStartResult(started, failed, "a Steam está aberta, mas sem usuário logado");
+                }
+            }
+
             failed[appId] = reason;
         }
 
@@ -105,6 +118,41 @@ public sealed class AgentLauncher(string agentPath) : IAgentLauncher, IAsyncDisp
     }
 
     public ValueTask DisposeAsync() => new(StopAllAsync());
+
+    private async Task<bool> ProbeSteamAsync(CancellationToken cancellationToken)
+    {
+        using var probe = new Process
+        {
+            StartInfo = new ProcessStartInfo(agentPath)
+            {
+                ArgumentList = { ProbeAppId.ToString(), "--seconds", "1", "--parent-pid", Environment.ProcessId.ToString() },
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            },
+        };
+
+        try
+        {
+            probe.Start();
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(ProbeTimeout);
+            var output = probe.StandardOutput.ReadToEndAsync(timeout.Token);
+            var errors = probe.StandardError.ReadToEndAsync(timeout.Token);
+            await probe.WaitForExitAsync(timeout.Token);
+            await Task.WhenAll(output, errors);
+            return probe.ExitCode == (int)AgentExitCode.Stopped;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            probe.Kill(entireProcessTree: true);
+            return false;
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return false;
+        }
+    }
 
     private enum ReadyOutcome
     {
