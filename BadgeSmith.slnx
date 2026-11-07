@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BadgeSmith.Agent/BadgeSmith.Agent.csproj" />
+    <Project Path="src/BadgeSmith.Cli/BadgeSmith.Cli.csproj" />
+    <Project Path="src/BadgeSmith.Core/BadgeSmith.Core.csproj" />
+    <Project Path="src/BadgeSmith.Steam/BadgeSmith.Steam.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BadgeSmith.Tests/BadgeSmith.Tests.csproj" />
+  </Folder>
+</Solution>
