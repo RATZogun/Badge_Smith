@@ -9,6 +9,9 @@ public enum AgentExitCode
     SteamNotLoggedOn = 5,
     WrongAppId = 6,
     UnsupportedSteam = 7,
+    StatsUnavailable = 8,
+    SchemaUnavailable = 9,
+    StoreFailed = 10,
 }
 
 public static class AgentExitCodes
