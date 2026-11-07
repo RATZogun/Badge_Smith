@@ -50,6 +50,11 @@ catch (InvalidOperationException error)
     Console.Error.WriteLine($"ERRO {error.Message}");
     return (int)AgentExitCode.UnsupportedSteam;
 }
+catch (Exception error) when (error is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
+{
+    Console.Error.WriteLine($"ERRO o steamclient em {libraryPath} não pôde ser carregado: a instalação da Steam está íntegra?");
+    return (int)AgentExitCode.SteamNotInstalled;
+}
 
 using var client = opened;
 
