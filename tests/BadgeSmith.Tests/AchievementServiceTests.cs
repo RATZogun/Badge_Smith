@@ -73,6 +73,23 @@ public class AchievementServiceTests
         Assert.InRange(delay, options.MinDelay, options.MaxDelay);
     }
 
+    [Fact]
+    public async Task UsesMinDelayAloneAsAFixedDelay()
+    {
+        var agent = new FakeAgent(Achievements);
+        var delays = new List<TimeSpan>();
+        var service = new AchievementService(agent, (d, _) =>
+        {
+            delays.Add(d);
+            return Task.CompletedTask;
+        });
+
+        await service.SetAsync(1, ["A", "B"], unlock: true, new AchievementChangeOptions { MinDelay = TimeSpan.FromSeconds(30) }, null, CancellationToken.None);
+
+        Assert.Equal([["A"], ["B"]], agent.Calls);
+        Assert.Equal([TimeSpan.FromSeconds(30)], delays);
+    }
+
     private static AchievementState State(string api, bool achieved, bool isProtected = false) =>
         new(api, api, "", false, isProtected, achieved, null);
 

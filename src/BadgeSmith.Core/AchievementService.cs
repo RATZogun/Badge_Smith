@@ -5,7 +5,7 @@ public sealed record AchievementChangeOptions
     public TimeSpan MinDelay { get; init; } = TimeSpan.Zero;
     public TimeSpan MaxDelay { get; init; } = TimeSpan.Zero;
 
-    public bool UsesDelay => MaxDelay > TimeSpan.Zero;
+    public bool UsesDelay => MinDelay > TimeSpan.Zero || MaxDelay > TimeSpan.Zero;
 }
 
 public sealed class AchievementService(
@@ -88,7 +88,7 @@ public sealed class AchievementService(
 
     private TimeSpan NextDelay(AchievementChangeOptions options)
     {
-        var min = Math.Min(options.MinDelay.Ticks, options.MaxDelay.Ticks);
+        var min = options.MinDelay.Ticks;
         var max = Math.Max(options.MinDelay.Ticks, options.MaxDelay.Ticks);
         return TimeSpan.FromTicks(min + (long)(_random.NextDouble() * (max - min)));
     }
