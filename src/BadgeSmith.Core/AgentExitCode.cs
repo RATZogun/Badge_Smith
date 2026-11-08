@@ -13,6 +13,7 @@ public enum AgentExitCode
     SchemaUnavailable = 9,
     StoreFailed = 10,
     GameNotAvailable = 11,
+    AgentNotStarted = 127,
 }
 
 public static class AgentExitCodes
