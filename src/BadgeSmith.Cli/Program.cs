@@ -1,30 +1,16 @@
 ﻿using BadgeSmith.Core;
 using BadgeSmith.Steam;
+using QRCoder;
 
 const string CookieVariable = "BADGESMITH_STEAM_LOGIN_SECURE";
 
 var command = args.FirstOrDefault();
-if (command is not ("scan" or "farm"))
+if (command is not ("login" or "logout" or "scan" or "farm"))
 {
-    Console.Error.WriteLine("Uso: BadgeSmith.Cli scan | farm [--agent <caminho>] [--hours <horas>]");
+    Console.Error.WriteLine("Uso: BadgeSmith.Cli login [--user <conta>] | logout | scan | farm [--agent <caminho>] [--hours <horas>]");
     return 2;
 }
 
-DotEnv.Load(Path.Combine(Environment.CurrentDirectory, ".env"));
-var cookie = Environment.GetEnvironmentVariable(CookieVariable);
-if (string.IsNullOrWhiteSpace(cookie))
-{
-    Console.Error.WriteLine($"Defina {CookieVariable} no ambiente ou no arquivo .env (veja o .env.example).");
-    return 3;
-}
-
-var options = new FarmOptions
-{
-    HoursBeforeDrops = Option("--hours") is { } hours && double.TryParse(hours, System.Globalization.CultureInfo.InvariantCulture, out var h) ? h : 2,
-};
-
-var session = new SteamWebSession(cookie);
-using var scanner = new BadgeScanner(session);
 using var cancel = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>
 {
@@ -32,8 +18,45 @@ Console.CancelKeyPress += (_, e) =>
     cancel.Cancel();
 };
 
+using var auth = new SteamAuthApi();
+
 try
 {
+    var vault = SessionVault.ForCurrentSystem();
+    if (command == "login")
+    {
+        return await LoginAsync(vault);
+    }
+
+    if (command == "logout")
+    {
+        vault.Delete();
+        Console.WriteLine("Sessão apagada do cofre do sistema.");
+        return 0;
+    }
+
+    DotEnv.Load(Path.Combine(Environment.CurrentDirectory, ".env"));
+    Func<CancellationToken, Task<SteamWebSession>> openSession;
+    if (Environment.GetEnvironmentVariable(CookieVariable) is { Length: > 0 } cookie)
+    {
+        openSession = _ => Task.FromResult(new SteamWebSession(cookie));
+    }
+    else if (vault.Read() is { } refreshToken)
+    {
+        openSession = async ct => new SteamWebSession(await auth.GetLoginCookieAsync(refreshToken, ct));
+    }
+    else
+    {
+        Console.Error.WriteLine("Nenhuma sessão da Steam salva. Rode \"BadgeSmith.Cli login\" primeiro.");
+        return 3;
+    }
+
+    var options = new FarmOptions
+    {
+        HoursBeforeDrops = Option("--hours") is { } hours && double.TryParse(hours, System.Globalization.CultureInfo.InvariantCulture, out var h) ? h : 2,
+    };
+
+    using var scanner = new RenewingBadgeScanner(openSession);
     if (command == "scan")
     {
         var badges = await scanner.ScanAsync(cancel.Token);
@@ -63,10 +86,91 @@ try
     await runner.RunAsync(Report, cancel.Token);
     return 0;
 }
-catch (SteamSessionExpiredException error)
+catch (Exception error) when (error is SteamSessionExpiredException or SteamAuthException or SessionVaultException)
 {
     Console.Error.WriteLine(error.Message);
     return 5;
+}
+catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+{
+    return 1;
+}
+
+async Task<int> LoginAsync(ISessionVault vault)
+{
+    var login = new SteamLogin(auth);
+    SteamLoginResult result;
+    if (Option("--user") is { } accountName)
+    {
+        Console.Write("Senha: ");
+        var password = ReadSecret();
+        result = await login.WithCredentialsAsync(accountName, password, AskCodeAsync, WaitingConfirmation, cancel.Token);
+    }
+    else
+    {
+        Console.WriteLine("No app Steam do celular, abra o Steam Guard e escaneie o QR code (Ctrl+C para cancelar):");
+        result = await login.WithQrAsync(ShowQrCode, cancel.Token);
+    }
+
+    var session = new SteamWebSession(await auth.GetLoginCookieAsync(result.RefreshToken, cancel.Token));
+    vault.Save(result.RefreshToken);
+    Console.WriteLine($"Logado como {result.AccountName} ({session.SteamId}). A sessão ficou guardada no cofre do sistema.");
+    return 0;
+}
+
+static void ShowQrCode(string challengeUrl)
+{
+    using var data = QRCodeGenerator.GenerateQrCode(challengeUrl, QRCodeGenerator.ECCLevel.L);
+    Console.WriteLine(new AsciiQRCode(data).GetGraphicSmall());
+}
+
+static Task<string> AskCodeAsync(SteamGuardType type, bool previousWasWrong, CancellationToken cancellationToken)
+{
+    if (previousWasWrong)
+    {
+        Console.WriteLine("Código incorreto.");
+    }
+
+    Console.Write(type == SteamGuardType.EmailCode
+        ? "Código do Steam Guard enviado para o seu e-mail: "
+        : "Código do Steam Guard do app no celular: ");
+    return Task.FromResult(Console.ReadLine() ?? "");
+}
+
+static void WaitingConfirmation(SteamGuardType type) =>
+    Console.WriteLine(type == SteamGuardType.EmailConfirmation
+        ? "Confirme o login pelo link que a Steam enviou para o seu e-mail."
+        : "Aprove o login no app Steam do celular.");
+
+static string ReadSecret()
+{
+    if (Console.IsInputRedirected)
+    {
+        return Console.ReadLine() ?? "";
+    }
+
+    var secret = new System.Text.StringBuilder();
+    while (true)
+    {
+        var key = Console.ReadKey(intercept: true);
+        if (key.Key == ConsoleKey.Enter)
+        {
+            Console.WriteLine();
+            return secret.ToString();
+        }
+
+        if (key.Key == ConsoleKey.Backspace)
+        {
+            if (secret.Length > 0)
+            {
+                secret.Length--;
+            }
+        }
+        else if (!char.IsControl(key.KeyChar))
+        {
+            secret.Append(key.KeyChar);
+        }
+    }
 }
 
 void Report(FarmEvent e)
