@@ -22,6 +22,18 @@ public class SteamSessionTests
         Assert.Contains("76561198000000001", steam.Bodies[1]);
     }
 
+    [Theory]
+    [InlineData("<html>manutenção</html>")]
+    [InlineData("""{"error":"invalid"}""")]
+    [InlineData("""{"steamID":"1","transfer_info":{}}""")]
+    public async Task RejectsAnUnexpectedFinalizeResponse(string body)
+    {
+        var steam = new FakeWeb { FinalizeBody = body };
+        using var api = new SteamAuthApi(steam);
+
+        await Assert.ThrowsAsync<SteamAuthException>(() => api.GetLoginCookieAsync("refresh", CancellationToken.None));
+    }
+
     [Fact]
     public async Task RevokesTheRefreshTokenWithTheSessionAccessToken()
     {
@@ -49,6 +61,7 @@ public class SteamSessionTests
         public List<Uri> Requests { get; } = [];
         public List<string> Hosts => Requests.Where(r => r.Host != "api.steampowered.com").Select(r => r.Host).ToList();
         public List<string> Bodies { get; } = [];
+        public string? FinalizeBody { get; init; }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -60,7 +73,7 @@ public class SteamSessionTests
             switch (uri.Host)
             {
                 case "login.steampowered.com":
-                    response.Content = new StringContent("""
+                    response.Content = new StringContent(FinalizeBody ?? """
                         {"steamID":"76561198000000001","transfer_info":[
                           {"url":"https://help.steampowered.com/login/settoken","params":{"nonce":"n1","auth":"a1"}},
                           {"url":"https://steamcommunity.com/login/settoken","params":{"nonce":"n2","auth":"a2"}}]}

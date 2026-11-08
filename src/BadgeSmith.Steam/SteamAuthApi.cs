@@ -129,11 +129,24 @@ public sealed class SteamAuthApi : IDisposable
             cancellationToken);
         finalize.EnsureSuccessStatusCode();
 
-        using var json = JsonDocument.Parse(await finalize.Content.ReadAsStringAsync(cancellationToken));
-        var root = json.RootElement;
-        if (!root.TryGetProperty("transfer_info", out var transfers) || !root.TryGetProperty("steamID", out var steamId))
+        JsonDocument json;
+        try
         {
-            var error = root.TryGetProperty("error", out var code) ? code.GetInt32() : 0;
+            json = JsonDocument.Parse(await finalize.Content.ReadAsStringAsync(cancellationToken));
+        }
+        catch (JsonException)
+        {
+            throw new SteamAuthException(0, "A Steam devolveu uma resposta inesperada ao abrir a sessão. Tente de novo.");
+        }
+
+        using var document = json;
+        var root = json.RootElement;
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("transfer_info", out var transfers)
+            || transfers.ValueKind != JsonValueKind.Array
+            || !root.TryGetProperty("steamID", out var steamId))
+        {
+            var error = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("error", out var code) && code.ValueKind == JsonValueKind.Number && code.TryGetInt32(out var number) ? number : 0;
             throw new SteamAuthException(error, "A Steam não aceitou a sessão salva. Faça login de novo.");
         }
 
