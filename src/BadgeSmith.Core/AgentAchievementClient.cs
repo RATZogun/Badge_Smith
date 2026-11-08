@@ -36,8 +36,18 @@ public sealed class AgentAchievementClient(string agentPath) : IAchievementAgent
         startInfo.ArgumentList.Add("--parent-pid");
         startInfo.ArgumentList.Add(Environment.ProcessId.ToString());
 
-        using var process = Process.Start(startInfo)
-            ?? throw new AchievementAgentException(AgentExitCode.InvalidArguments, "Não foi possível iniciar o agente.");
+        Process? started;
+        try
+        {
+            started = Process.Start(startInfo);
+        }
+        catch (System.ComponentModel.Win32Exception error)
+        {
+            throw new AchievementAgentException(AgentExitCode.AgentNotStarted, $"Não foi possível iniciar o agente em {agentPath} ({error.Message}).");
+        }
+
+        using var process = started
+            ?? throw new AchievementAgentException(AgentExitCode.AgentNotStarted, $"Não foi possível iniciar o agente em {agentPath}.");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(Timeout);
         try
