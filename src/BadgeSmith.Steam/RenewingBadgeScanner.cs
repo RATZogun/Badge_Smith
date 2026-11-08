@@ -2,9 +2,12 @@ using BadgeSmith.Core;
 
 namespace BadgeSmith.Steam;
 
-public sealed class RenewingBadgeScanner(Func<CancellationToken, Task<SteamWebSession>> openSession) : IDisposable
+public sealed class RenewingBadgeScanner(
+    Func<CancellationToken, Task<SteamWebSession>> openSession,
+    Func<SteamWebSession, IBadgeScanner>? createScanner = null) : IBadgeScanner
 {
-    private BadgeScanner? _scanner;
+    private readonly Func<SteamWebSession, IBadgeScanner> _createScanner = createScanner ?? (session => new BadgeScanner(session));
+    private IBadgeScanner? _scanner;
 
     public async Task<IReadOnlyList<Badge>> ScanAsync(CancellationToken cancellationToken = default)
     {
@@ -32,6 +35,6 @@ public sealed class RenewingBadgeScanner(Func<CancellationToken, Task<SteamWebSe
     {
         var session = await openSession(cancellationToken);
         _scanner?.Dispose();
-        _scanner = new BadgeScanner(session);
+        _scanner = _createScanner(session);
     }
 }
