@@ -66,8 +66,7 @@ internal sealed unsafe class SteamClient : IDisposable
 
     public bool? IsLoggedOn()
     {
-        var user = GetInterface(UserVersions, name =>
-            ((delegate* unmanaged<IntPtr, int, int, byte*, IntPtr>)_clientVtable[5])(_client, _user, _pipe, (byte*)name));
+        var user = GetUser();
         if (user == IntPtr.Zero)
         {
             return null;
@@ -75,6 +74,25 @@ internal sealed unsafe class SteamClient : IDisposable
 
         var userVtable = *(IntPtr**)user;
         return ((delegate* unmanaged<IntPtr, byte>)userVtable[1])(user) != 0;
+    }
+
+    public ulong? GetSteamId()
+    {
+        var user = GetUser();
+        if (user == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        var getSteamId = (*(IntPtr**)user)[2];
+        if (OperatingSystem.IsWindows())
+        {
+            ulong steamId = 0;
+            ((delegate* unmanaged<IntPtr, ulong*, ulong*>)getSteamId)(user, &steamId);
+            return steamId;
+        }
+
+        return ((delegate* unmanaged<IntPtr, ulong>)getSteamId)(user);
     }
 
     public uint? GetAppId()
@@ -96,6 +114,9 @@ internal sealed unsafe class SteamClient : IDisposable
             ((delegate* unmanaged<IntPtr, int, int, byte*, IntPtr>)_clientVtable[13])(_client, _user, _pipe, (byte*)name));
         return stats == IntPtr.Zero ? null : new SteamUserStats(stats, new SteamCallbacks(_library, _pipe));
     }
+
+    private IntPtr GetUser() => GetInterface(UserVersions, name =>
+        ((delegate* unmanaged<IntPtr, int, int, byte*, IntPtr>)_clientVtable[5])(_client, _user, _pipe, (byte*)name));
 
     private static IntPtr GetInterface(string[] versions, Func<IntPtr, IntPtr> get)
     {

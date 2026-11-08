@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace BadgeSmith.Core;
 
-public sealed class AgentLauncher(string agentPath) : IAgentLauncher, IAsyncDisposable
+public sealed class AgentLauncher(string agentPath, ulong? steamId = null) : IAgentLauncher, IAsyncDisposable
 {
     private static readonly TimeSpan ReadyTimeout = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(5);
@@ -32,6 +32,12 @@ public sealed class AgentLauncher(string agentPath) : IAgentLauncher, IAsyncDisp
                     UseShellExecute = false,
                 },
             };
+            if (steamId is { } id)
+            {
+                process.StartInfo.ArgumentList.Add("--steam-id");
+                process.StartInfo.ArgumentList.Add(id.ToString());
+            }
+
             process.ErrorDataReceived += (_, e) =>
             {
                 if (!string.IsNullOrWhiteSpace(e.Data))
@@ -95,11 +101,15 @@ public sealed class AgentLauncher(string agentPath) : IAgentLauncher, IAsyncDisp
 
             if (exitCode == (int)AgentExitCode.GameNotAvailable && started.Count == 0 && !steamLoggedIn)
             {
-                steamLoggedIn = await ProbeSteamAsync(cancellationToken);
+                var (probeCode, probeError) = await ProbeSteamAsync(cancellationToken);
+                steamLoggedIn = probeCode == (int)AgentExitCode.Stopped;
                 if (!steamLoggedIn)
                 {
                     RunningAppIds = started;
-                    return new AgentStartResult(started, failed, "a Steam está aberta, mas sem usuário logado");
+                    return new AgentStartResult(
+                        started,
+                        failed,
+                        probeCode == (int)AgentExitCode.WrongAccount ? probeError : "a Steam está aberta, mas sem usuário logado");
                 }
             }
 
@@ -119,7 +129,7 @@ public sealed class AgentLauncher(string agentPath) : IAgentLauncher, IAsyncDisp
 
     public ValueTask DisposeAsync() => new(StopAllAsync());
 
-    private async Task<bool> ProbeSteamAsync(CancellationToken cancellationToken)
+    private async Task<(int? ExitCode, string Error)> ProbeSteamAsync(CancellationToken cancellationToken)
     {
         using var probe = new Process
         {
@@ -131,6 +141,11 @@ public sealed class AgentLauncher(string agentPath) : IAgentLauncher, IAsyncDisp
                 UseShellExecute = false,
             },
         };
+        if (steamId is { } id)
+        {
+            probe.StartInfo.ArgumentList.Add("--steam-id");
+            probe.StartInfo.ArgumentList.Add(id.ToString());
+        }
 
         try
         {
@@ -141,16 +156,16 @@ public sealed class AgentLauncher(string agentPath) : IAgentLauncher, IAsyncDisp
             var errors = probe.StandardError.ReadToEndAsync(timeout.Token);
             await probe.WaitForExitAsync(timeout.Token);
             await Task.WhenAll(output, errors);
-            return probe.ExitCode == (int)AgentExitCode.Stopped;
+            return (probe.ExitCode, (await errors).Trim());
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             probe.Kill(entireProcessTree: true);
-            return false;
+            return (null, "");
         }
         catch (System.ComponentModel.Win32Exception)
         {
-            return false;
+            return (null, "");
         }
     }
 
