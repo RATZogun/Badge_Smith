@@ -5,13 +5,14 @@ using BadgeSmith.Core;
 
 if (args.Length < 1 || !uint.TryParse(args[0], out var appId) || appId == 0)
 {
-    Console.Error.WriteLine("Uso: BadgeSmith.Agent <appId> [--seconds N] [--parent-pid PID] [--stdin-control]");
+    Console.Error.WriteLine("Uso: BadgeSmith.Agent <appId> [--seconds N] [--parent-pid PID] [--stdin-control] [--steam-id ID]");
     Console.Error.WriteLine("     BadgeSmith.Agent <appId> achievements list|unlock|lock [API...] [--language <idioma>]");
     return (int)AgentExitCode.InvalidArguments;
 }
 
 int? seconds = null;
 int? parentPid = null;
+ulong? expectedSteamId = null;
 var stdinControl = false;
 var language = "english";
 string? achievementsAction = null;
@@ -37,6 +38,10 @@ for (var i = first; i < args.Length; i++)
             break;
         case "--parent-pid" when i + 1 < args.Length && int.TryParse(args[i + 1], out var p):
             parentPid = p;
+            i++;
+            break;
+        case "--steam-id" when i + 1 < args.Length && ulong.TryParse(args[i + 1], out var id):
+            expectedSteamId = id;
             i++;
             break;
         case "--stdin-control":
@@ -96,6 +101,12 @@ switch (client.IsLoggedOn())
     case false:
         Console.Error.WriteLine("ERRO a Steam não está logada.");
         return (int)AgentExitCode.SteamNotLoggedOn;
+}
+
+if (expectedSteamId is { } expected && client.GetSteamId() is { } loggedSteamId && loggedSteamId != expected)
+{
+    Console.Error.WriteLine($"ERRO a Steam está logada na conta {loggedSteamId}, mas a sessão web é da conta {expected}.");
+    return (int)AgentExitCode.WrongAccount;
 }
 
 var steamAppId = client.GetAppId();

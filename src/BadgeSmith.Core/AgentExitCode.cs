@@ -13,6 +13,7 @@ public enum AgentExitCode
     SchemaUnavailable = 9,
     StoreFailed = 10,
     GameNotAvailable = 11,
+    WrongAccount = 12,
     AgentNotStarted = 127,
 }
 
@@ -22,5 +23,6 @@ public static class AgentExitCodes
         AgentExitCode.SteamNotInstalled or
         AgentExitCode.SteamNotRunning or
         AgentExitCode.SteamNotLoggedOn or
+        AgentExitCode.WrongAccount or
         AgentExitCode.UnsupportedSteam;
 }

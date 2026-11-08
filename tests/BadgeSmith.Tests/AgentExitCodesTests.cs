@@ -9,6 +9,7 @@ public class AgentExitCodesTests
     [InlineData(AgentExitCode.SteamNotRunning, true)]
     [InlineData(AgentExitCode.SteamNotLoggedOn, true)]
     [InlineData(AgentExitCode.UnsupportedSteam, true)]
+    [InlineData(AgentExitCode.WrongAccount, true)]
     [InlineData(AgentExitCode.WrongAppId, false)]
     [InlineData(AgentExitCode.GameNotAvailable, false)]
     [InlineData(AgentExitCode.StatsUnavailable, false)]

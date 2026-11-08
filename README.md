@@ -7,9 +7,12 @@ Farma cartas colecionáveis da Steam e desbloqueia ou bloqueia conquistas, para 
 
 ## Como funciona
 
-- **Steam aberta**: o Badge Smith usa a Steam já instalada e logada. Ele carrega o `steamclient` da própria instalação, então não distribui nenhuma biblioteca da Valve nem pede a sua senha.
+- **Steam aberta**: o Badge Smith usa a Steam já instalada e logada. Ele carrega o `steamclient` da própria instalação, então não distribui nenhuma biblioteca da Valve.
 - **"Jogar" um jogo**: para cada jogo, um processo auxiliar (`BadgeSmith.Agent`) define o `SteamAppId` e se conecta à Steam, que passa a mostrar você jogando e a contar o tempo de jogo.
-- **Cartas restantes**: lidas da sua página de badges com o cookie `steamLoginSecure` da sua sessão.
+- **Login**: pela API de autenticação da Steam, com QR code aprovado no app Steam do celular ou com usuário, senha e
+  Steam Guard. A senha vai criptografada direto para a Steam e não é guardada. O que fica guardado é o token da sessão,
+  no cofre do sistema (Gerenciador de Credenciais no Windows, Secret Service no Linux).
+- **Cartas restantes**: lidas da sua página de badges com o cookie de sessão que a Steam gera a partir desse token.
 - **Fila de farm**: jogos com menos de 2 h rodam juntos (até 30) para acumular tempo; os demais rodam um por vez, em ciclos de 15 min (5 min na última carta), relendo as badges a cada ciclo.
 - **Conquistas**: os nomes, descrições e ícones vêm do schema que a Steam guarda em `appcache/stats`; o estado de cada
   conquista é lido e gravado pela Steam. Conquistas protegidas (que só o servidor do jogo pode alterar) não são
@@ -18,15 +21,17 @@ Farma cartas colecionáveis da Steam e desbloqueia ou bloqueia conquistas, para 
 ## Requisitos
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
-- Steam instalada, aberta e logada
+- Steam instalada, aberta e logada na mesma conta do login do Badge Smith
+- No Linux, um cofre compatível com o Secret Service (GNOME Keyring ou KWallet) e a `libsecret`
 
 ## Rodar o protótipo
 
 ```bash
-cp .env.example .env    # e preencha BADGESMITH_STEAM_LOGIN_SECURE
 dotnet build BadgeSmith.slnx
+dotnet run --project src/BadgeSmith.Cli -- login   # QR code no terminal (ou --user <conta> para usuário e senha)
 dotnet run --project src/BadgeSmith.Cli -- scan    # lista os jogos com cartas a dropar
 dotnet run --project src/BadgeSmith.Cli -- farm    # farma até acabar (Ctrl+C para parar)
+dotnet run --project src/BadgeSmith.Cli -- logout  # encerra a sessão na Steam e apaga do cofre
 ```
 
 Conquistas de um jogo, pelo agente (a saída é uma linha JSON por conquista):
@@ -37,8 +42,8 @@ dotnet run --project src/BadgeSmith.Agent -- <appId> achievements unlock <API_NA
 dotnet run --project src/BadgeSmith.Agent -- <appId> achievements lock <API_NAME> [...]
 ```
 
-O valor do cookie `steamLoginSecure` fica nas ferramentas de desenvolvedor do navegador, em steamcommunity.com, logado
-na sua conta. O `.env` fica fora do git.
+Para desenvolvimento, dá para pular o login e usar um cookie `steamLoginSecure` copiado do navegador: copie o
+`.env.example` para `.env` e preencha o valor. Quando ele está definido, o cofre não é usado. O `.env` fica fora do git.
 
 ## Desenvolvimento
 
@@ -59,9 +64,9 @@ Badge_Smith/
 ├── src/
 │   ├── BadgeSmith.Agent/    # processo auxiliar por jogo: joga o appId e lê ou grava as conquistas
 │   ├── BadgeSmith.Core/     # fila de farm, controle dos agentes e serviço de conquistas
-│   ├── BadgeSmith.Steam/    # sessão web e leitura da página de badges
-│   └── BadgeSmith.Cli/      # linha de comando provisória (scan e farm)
-└── tests/BadgeSmith.Tests/  # testes do farm, da leitura das badges e do schema de conquistas
+│   ├── BadgeSmith.Steam/    # login, cofre da sessão e leitura da página de badges
+│   └── BadgeSmith.Cli/      # linha de comando provisória (login, scan e farm)
+└── tests/BadgeSmith.Tests/  # testes do farm, do login, da leitura das badges e das conquistas
 ```
 
 ## Aviso

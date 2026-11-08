@@ -2,7 +2,7 @@ using BadgeSmith.Core;
 
 namespace BadgeSmith.Steam;
 
-public sealed class BadgeScanner(SteamWebSession session) : IDisposable
+public sealed class BadgeScanner(SteamWebSession session) : IBadgeScanner
 {
     private static readonly TimeSpan DelayBetweenRequests = TimeSpan.FromMilliseconds(500);
 
