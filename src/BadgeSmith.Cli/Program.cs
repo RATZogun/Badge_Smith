@@ -30,20 +30,23 @@ try
 
     if (command == "logout")
     {
-        vault.Delete();
-        Console.WriteLine("Sessão apagada do cofre do sistema.");
-        return 0;
+        return await LogoutAsync(vault);
     }
 
     DotEnv.Load(Path.Combine(Environment.CurrentDirectory, ".env"));
     Func<CancellationToken, Task<SteamWebSession>> openSession;
+    ulong? steamId;
     if (Environment.GetEnvironmentVariable(CookieVariable) is { Length: > 0 } cookie)
     {
-        openSession = _ => Task.FromResult(new SteamWebSession(cookie));
+        Console.Error.WriteLine($"Usando o cookie de {CookieVariable} (desenvolvimento) no lugar da sessão salva.");
+        var fixedSession = new SteamWebSession(cookie);
+        openSession = _ => Task.FromResult(fixedSession);
+        steamId = fixedSession.SteamId;
     }
     else if (vault.Read() is { } refreshToken)
     {
         openSession = async ct => new SteamWebSession(await auth.GetLoginCookieAsync(refreshToken, ct));
+        steamId = SteamAuthApi.SteamIdFromToken(refreshToken);
     }
     else
     {
@@ -81,7 +84,7 @@ try
         return 4;
     }
 
-    await using var launcher = new AgentLauncher(agentPath);
+    await using var launcher = new AgentLauncher(agentPath, steamId);
     var runner = new FarmRunner(scanner.ScanAsync, launcher, options);
     await runner.RunAsync(Report, cancel.Token);
     return 0;
@@ -108,7 +111,6 @@ async Task<int> LoginAsync(ISessionVault vault)
     }
     else
     {
-        Console.WriteLine("No app Steam do celular, abra o Steam Guard e escaneie o QR code (Ctrl+C para cancelar):");
         result = await login.WithQrAsync(ShowQrCode, cancel.Token);
     }
 
@@ -118,8 +120,36 @@ async Task<int> LoginAsync(ISessionVault vault)
     return 0;
 }
 
+async Task<int> LogoutAsync(ISessionVault vault)
+{
+    if (vault.Read() is { } refreshToken)
+    {
+        try
+        {
+            await auth.RevokeAsync(refreshToken, cancel.Token);
+        }
+        catch (SteamAuthException)
+        {
+        }
+        catch (HttpRequestException error)
+        {
+            Console.Error.WriteLine($"Não foi possível encerrar a sessão na Steam ({error.Message}); ela foi apagada só deste computador.");
+        }
+    }
+
+    vault.Delete();
+    Console.WriteLine("Sessão encerrada e apagada do cofre do sistema.");
+    return 0;
+}
+
 static void ShowQrCode(string challengeUrl)
 {
+    if (!Console.IsOutputRedirected)
+    {
+        Console.Clear();
+    }
+
+    Console.WriteLine("No app Steam do celular, abra o Steam Guard e escaneie o QR code (Ctrl+C para cancelar):");
     using var data = QRCodeGenerator.GenerateQrCode(challengeUrl, QRCodeGenerator.ECCLevel.L);
     Console.WriteLine(new AsciiQRCode(data).GetGraphicSmall());
 }

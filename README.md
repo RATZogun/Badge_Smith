@@ -21,7 +21,8 @@ Farma cartas colecionáveis da Steam e desbloqueia ou bloqueia conquistas, para 
 ## Requisitos
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
-- Steam instalada, aberta e logada
+- Steam instalada, aberta e logada na mesma conta do login do Badge Smith
+- No Linux, um cofre compatível com o Secret Service (GNOME Keyring ou KWallet) e a `libsecret`
 
 ## Rodar o protótipo
 
@@ -30,7 +31,7 @@ dotnet build BadgeSmith.slnx
 dotnet run --project src/BadgeSmith.Cli -- login   # QR code no terminal (ou --user <conta> para usuário e senha)
 dotnet run --project src/BadgeSmith.Cli -- scan    # lista os jogos com cartas a dropar
 dotnet run --project src/BadgeSmith.Cli -- farm    # farma até acabar (Ctrl+C para parar)
-dotnet run --project src/BadgeSmith.Cli -- logout  # apaga a sessão do cofre
+dotnet run --project src/BadgeSmith.Cli -- logout  # encerra a sessão na Steam e apaga do cofre
 ```
 
 Conquistas de um jogo, pelo agente (a saída é uma linha JSON por conquista):
