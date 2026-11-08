@@ -129,6 +129,12 @@ public sealed class AgentLauncher(string agentPath, ulong? steamId = null) : IAg
 
     public ValueTask DisposeAsync() => new(StopAllAsync());
 
+    public async Task<string?> CheckAccountAsync(CancellationToken cancellationToken)
+    {
+        var (exitCode, error) = await ProbeSteamAsync(cancellationToken);
+        return exitCode == (int)AgentExitCode.WrongAccount ? error : null;
+    }
+
     private async Task<(int? ExitCode, string Error)> ProbeSteamAsync(CancellationToken cancellationToken)
     {
         using var probe = new Process
