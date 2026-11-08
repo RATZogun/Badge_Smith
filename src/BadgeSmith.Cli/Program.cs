@@ -7,7 +7,7 @@ const string CookieVariable = "BADGESMITH_STEAM_LOGIN_SECURE";
 var command = args.FirstOrDefault();
 if (command is not ("login" or "logout" or "scan" or "farm"))
 {
-    Console.Error.WriteLine("Uso: BadgeSmith.Cli login [--user <conta>] | logout | scan | farm [--agent <caminho>] [--hours <horas>]");
+    Console.Error.WriteLine("Uso: BadgeSmith.Cli login [--user <conta>] [--agent <caminho>] | logout | scan | farm [--agent <caminho>] [--hours <horas>]");
     return 2;
 }
 
@@ -98,6 +98,11 @@ catch (OperationCanceledException) when (cancel.IsCancellationRequested)
 {
     return 1;
 }
+catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
+{
+    Console.Error.WriteLine($"Não foi possível falar com a Steam ({error.Message}). Confira a conexão e tente de novo.");
+    return 6;
+}
 
 async Task<int> LoginAsync(ISessionVault vault)
 {
@@ -115,31 +120,54 @@ async Task<int> LoginAsync(ISessionVault vault)
     }
 
     var session = new SteamWebSession(await auth.GetLoginCookieAsync(result.RefreshToken, cancel.Token));
+    var previous = vault.Read();
     vault.Save(result.RefreshToken);
+    if (previous is not null && previous != result.RefreshToken)
+    {
+        await TryRevokeAsync(previous);
+    }
+
     Console.WriteLine($"Logado como {result.AccountName} ({session.SteamId}). A sessão ficou guardada no cofre do sistema.");
+
+    var agentPath = Option("--agent") ?? DefaultAgentPath();
+    if (File.Exists(agentPath))
+    {
+        await using var launcher = new AgentLauncher(agentPath, session.SteamId);
+        if (await launcher.CheckAccountAsync(cancel.Token) is { } mismatch)
+        {
+            Console.Error.WriteLine($"Atenção: {mismatch.Replace("ERRO ", "")} Entre na Steam com a conta {result.AccountName} antes de farmar.");
+        }
+    }
+
     return 0;
 }
 
 async Task<int> LogoutAsync(ISessionVault vault)
 {
-    if (vault.Read() is { } refreshToken)
+    var refreshToken = vault.Read();
+    vault.Delete();
+    if (refreshToken is not null)
     {
-        try
-        {
-            await auth.RevokeAsync(refreshToken, cancel.Token);
-        }
-        catch (SteamAuthException)
-        {
-        }
-        catch (HttpRequestException error)
-        {
-            Console.Error.WriteLine($"Não foi possível encerrar a sessão na Steam ({error.Message}); ela foi apagada só deste computador.");
-        }
+        await TryRevokeAsync(refreshToken);
     }
 
-    vault.Delete();
     Console.WriteLine("Sessão encerrada e apagada do cofre do sistema.");
     return 0;
+}
+
+async Task TryRevokeAsync(string refreshToken)
+{
+    try
+    {
+        await auth.RevokeAsync(refreshToken, cancel.Token);
+    }
+    catch (SteamAuthException)
+    {
+    }
+    catch (Exception error) when (error is HttpRequestException or TaskCanceledException && !cancel.IsCancellationRequested)
+    {
+        Console.Error.WriteLine($"Não foi possível encerrar a sessão na Steam ({error.Message}); ela foi apagada só deste computador.");
+    }
 }
 
 static void ShowQrCode(string challengeUrl)
