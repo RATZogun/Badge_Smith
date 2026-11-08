@@ -88,8 +88,8 @@ public sealed class AchievementService(
 
     private TimeSpan NextDelay(AchievementChangeOptions options)
     {
-        var min = options.MinDelay.Ticks;
-        var max = Math.Max(options.MinDelay.Ticks, options.MaxDelay.Ticks);
+        var min = Math.Max(0, options.MinDelay.Ticks);
+        var max = Math.Max(min, options.MaxDelay.Ticks);
         return TimeSpan.FromTicks(min + (long)(_random.NextDouble() * (max - min)));
     }
 }

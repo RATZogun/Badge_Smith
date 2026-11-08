@@ -90,6 +90,24 @@ public class AchievementServiceTests
         Assert.Equal([TimeSpan.FromSeconds(30)], delays);
     }
 
+    [Fact]
+    public async Task TreatsANegativeMinDelayAsZero()
+    {
+        var agent = new FakeAgent(Achievements);
+        var delays = new List<TimeSpan>();
+        var service = new AchievementService(agent, (d, _) =>
+        {
+            delays.Add(d);
+            return Task.CompletedTask;
+        });
+        var options = new AchievementChangeOptions { MinDelay = TimeSpan.FromSeconds(-5), MaxDelay = TimeSpan.FromSeconds(10) };
+
+        await service.SetAsync(1, ["A", "B"], unlock: true, options, null, CancellationToken.None);
+
+        var delay = Assert.Single(delays);
+        Assert.InRange(delay, TimeSpan.Zero, options.MaxDelay);
+    }
+
     private static AchievementState State(string api, bool achieved, bool isProtected = false) =>
         new(api, api, "", false, isProtected, achieved, null);
 
