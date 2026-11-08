@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -29,6 +30,7 @@ public sealed class SteamAuthApi : IDisposable
     private const string DeviceName = "Badge Smith";
     private const int WebBrowserPlatform = 2;
     private const int PersistentSession = 1;
+    private const int PermanentRevoke = 1;
     private const string Website = "Community";
     private const string ServiceUrl = "https://api.steampowered.com/IAuthenticationService/";
 
@@ -156,7 +158,36 @@ public sealed class SteamAuthApi : IDisposable
         throw new SteamAuthException(0, "A Steam não devolveu o cookie de sessão da comunidade.");
     }
 
+    public async Task RevokeAsync(string refreshToken, CancellationToken cancellationToken)
+    {
+        var cookie = WebUtility.UrlDecode(await GetLoginCookieAsync(refreshToken, cancellationToken));
+        var accessToken = cookie[(cookie.IndexOf("||", StringComparison.Ordinal) + 2)..];
+        var request = new ProtoWriter().String(1, refreshToken).Varint(2, PermanentRevoke);
+        await CallAsync("RevokeToken", request, HttpMethod.Post, cancellationToken, accessToken);
+    }
+
     public void Dispose() => _http.Dispose();
+
+    public static ulong? SteamIdFromToken(string token)
+    {
+        var parts = token.Split('.');
+        if (parts.Length != 3)
+        {
+            return null;
+        }
+
+        try
+        {
+            var payload = parts[1].Replace('-', '+').Replace('_', '/');
+            payload = payload.PadRight(payload.Length + ((4 - (payload.Length % 4)) % 4), '=');
+            using var json = JsonDocument.Parse(Convert.FromBase64String(payload));
+            return json.RootElement.TryGetProperty("sub", out var sub) && ulong.TryParse(sub.GetString(), out var steamId) ? steamId : null;
+        }
+        catch (Exception error) when (error is FormatException or JsonException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
 
     public static string? LoginCookie(IEnumerable<string> setCookieHeaders) =>
         setCookieHeaders
@@ -165,10 +196,15 @@ public sealed class SteamAuthApi : IDisposable
             .Select(pair => pair["steamLoginSecure=".Length..])
             .FirstOrDefault(value => value.Length > 0 && value != "deleted");
 
-    private async Task<ProtoMessage> CallAsync(string method, ProtoWriter request, HttpMethod httpMethod, CancellationToken cancellationToken)
+    private async Task<ProtoMessage> CallAsync(string method, ProtoWriter request, HttpMethod httpMethod, CancellationToken cancellationToken, string? accessToken = null)
     {
         var encoded = Convert.ToBase64String(request.ToArray());
         var url = $"{ServiceUrl}{method}/v1";
+        if (accessToken is not null)
+        {
+            url += $"?access_token={Uri.EscapeDataString(accessToken)}";
+        }
+
         using var message = httpMethod == HttpMethod.Get
             ? new HttpRequestMessage(HttpMethod.Get, $"{url}?input_protobuf_encoded={Uri.EscapeDataString(encoded)}")
             : new HttpRequestMessage(HttpMethod.Post, url) { Content = new FormUrlEncodedContent([new("input_protobuf_encoded", encoded)]) };
