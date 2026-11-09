@@ -2,7 +2,12 @@ namespace BadgeSmith.Core;
 
 public abstract record FarmEvent
 {
-    public sealed record Scanned(int GamesWithDrops, int TotalDrops) : FarmEvent;
+    public sealed record Scanned(IReadOnlyList<Badge> WithDrops, IReadOnlyList<Badge> Pending) : FarmEvent
+    {
+        public int GamesWithDrops => Pending.Count;
+
+        public int TotalDrops => Pending.Sum(b => b.RemainingDrops);
+    }
 
     public sealed record Farming(FarmStep Step, IReadOnlyList<uint> Started) : FarmEvent;
 
@@ -43,10 +48,11 @@ public sealed class FarmRunner(
                     continue;
                 }
 
-                var pending = badges
-                    .Where(b => b.RemainingDrops > 0 && !options.Blacklist.Contains(b.AppId) && !skipped.Contains(b.AppId))
+                var withDrops = badges.Where(b => b.RemainingDrops > 0).ToList();
+                var pending = withDrops
+                    .Where(b => !options.Blacklist.Contains(b.AppId) && !skipped.Contains(b.AppId))
                     .ToList();
-                onEvent(new FarmEvent.Scanned(pending.Count, pending.Sum(b => b.RemainingDrops)));
+                onEvent(new FarmEvent.Scanned(withDrops, pending));
 
                 FarmStep? step;
                 AgentStartResult result;
