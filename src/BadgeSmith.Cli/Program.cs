@@ -7,7 +7,7 @@ const string CookieVariable = "BADGESMITH_STEAM_LOGIN_SECURE";
 var command = args.FirstOrDefault();
 if (command is not ("login" or "logout" or "scan" or "farm"))
 {
-    Console.Error.WriteLine("Uso: BadgeSmith.Cli login [--user <conta>] [--agent <caminho>] | logout | scan | farm [--agent <caminho>] [--hours <horas>]");
+    Console.Error.WriteLine("Uso: BadgeSmith.Cli login [--agent <caminho>] | logout | scan | farm [--agent <caminho>] [--hours <horas>]");
     return 2;
 }
 
@@ -43,6 +43,12 @@ try
         openSession = _ => Task.FromResult(fixedSession);
         steamId = fixedSession.SteamId;
     }
+    else if (vault.Read() is { } stored && SteamWebSession.IsCookie(stored))
+    {
+        var storedSession = new SteamWebSession(stored);
+        openSession = _ => Task.FromResult(storedSession);
+        steamId = storedSession.SteamId;
+    }
     else if (vault.Read() is { } refreshToken)
     {
         openSession = async ct => new SteamWebSession(await auth.GetLoginCookieAsync(refreshToken, ct));
@@ -77,7 +83,7 @@ try
         return 0;
     }
 
-    var agentPath = Option("--agent") ?? DefaultAgentPath();
+    var agentPath = Option("--agent") ?? AgentLocator.DefaultPath();
     if (!File.Exists(agentPath))
     {
         Console.Error.WriteLine($"Agente não encontrado em {agentPath}. Compile o BadgeSmith.Agent ou use --agent.");
@@ -106,30 +112,19 @@ catch (Exception error) when (error is HttpRequestException or TaskCanceledExcep
 
 async Task<int> LoginAsync(ISessionVault vault)
 {
-    var login = new SteamLogin(auth);
-    SteamLoginResult result;
-    if (Option("--user") is { } accountName)
-    {
-        Console.Write("Senha: ");
-        var password = ReadSecret();
-        result = await login.WithCredentialsAsync(accountName, password, AskCodeAsync, WaitingConfirmation, cancel.Token);
-    }
-    else
-    {
-        result = await login.WithQrAsync(ShowQrCode, cancel.Token);
-    }
+    var result = await new SteamLogin(auth).WithQrAsync(ShowQrCode, cancel.Token);
 
     var session = new SteamWebSession(await auth.GetLoginCookieAsync(result.RefreshToken, cancel.Token));
     var previous = vault.Read();
     vault.Save(result.RefreshToken);
-    if (previous is not null && previous != result.RefreshToken)
+    if (previous is not null && previous != result.RefreshToken && !SteamWebSession.IsCookie(previous))
     {
         await TryRevokeAsync(previous);
     }
 
     Console.WriteLine($"Logado como {result.AccountName} ({session.SteamId}). A sessão ficou guardada no cofre do sistema.");
 
-    var agentPath = Option("--agent") ?? DefaultAgentPath();
+    var agentPath = Option("--agent") ?? AgentLocator.DefaultPath();
     if (File.Exists(agentPath))
     {
         await using var launcher = new AgentLauncher(agentPath, session.SteamId);
@@ -144,11 +139,11 @@ async Task<int> LoginAsync(ISessionVault vault)
 
 async Task<int> LogoutAsync(ISessionVault vault)
 {
-    var refreshToken = vault.Read();
+    var stored = vault.Read();
     vault.Delete();
-    if (refreshToken is not null)
+    if (stored is not null && !SteamWebSession.IsCookie(stored))
     {
-        await TryRevokeAsync(refreshToken);
+        await TryRevokeAsync(stored);
     }
 
     Console.WriteLine("Sessão encerrada e apagada do cofre do sistema.");
@@ -182,55 +177,6 @@ static void ShowQrCode(string challengeUrl)
     Console.WriteLine(new AsciiQRCode(data).GetGraphicSmall());
 }
 
-static Task<string> AskCodeAsync(SteamGuardType type, bool previousWasWrong, CancellationToken cancellationToken)
-{
-    if (previousWasWrong)
-    {
-        Console.WriteLine("Código incorreto.");
-    }
-
-    Console.Write(type == SteamGuardType.EmailCode
-        ? "Código do Steam Guard enviado para o seu e-mail: "
-        : "Código do Steam Guard do app no celular: ");
-    return Task.FromResult(Console.ReadLine() ?? "");
-}
-
-static void WaitingConfirmation(SteamGuardType type) =>
-    Console.WriteLine(type == SteamGuardType.EmailConfirmation
-        ? "Confirme o login pelo link que a Steam enviou para o seu e-mail."
-        : "Aprove o login no app Steam do celular.");
-
-static string ReadSecret()
-{
-    if (Console.IsInputRedirected)
-    {
-        return Console.ReadLine() ?? "";
-    }
-
-    var secret = new System.Text.StringBuilder();
-    while (true)
-    {
-        var key = Console.ReadKey(intercept: true);
-        if (key.Key == ConsoleKey.Enter)
-        {
-            Console.WriteLine();
-            return secret.ToString();
-        }
-
-        if (key.Key == ConsoleKey.Backspace)
-        {
-            if (secret.Length > 0)
-            {
-                secret.Length--;
-            }
-        }
-        else if (!char.IsControl(key.KeyChar))
-        {
-            secret.Append(key.KeyChar);
-        }
-    }
-}
-
 void Report(FarmEvent e)
 {
     var now = DateTime.Now.ToString("HH:mm:ss");
@@ -251,17 +197,4 @@ string? Option(string name)
 {
     var index = Array.IndexOf(args, name);
     return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
-}
-
-static string DefaultAgentPath()
-{
-    var name = OperatingSystem.IsWindows() ? "BadgeSmith.Agent.exe" : "BadgeSmith.Agent";
-    var sibling = Path.Combine(AppContext.BaseDirectory, name);
-    if (File.Exists(sibling))
-    {
-        return sibling;
-    }
-
-    var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name ?? "Debug";
-    return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "BadgeSmith.Agent", "bin", configuration, "net10.0", name));
 }
