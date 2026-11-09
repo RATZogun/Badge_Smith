@@ -48,6 +48,37 @@ public class SteamSessionTests
     }
 
     [Fact]
+    public void TellsACookieApartFromARefreshToken()
+    {
+        Assert.True(SteamWebSession.IsCookie(Cookie));
+        Assert.True(SteamWebSession.IsCookie("76561198000000001||token"));
+        Assert.False(SteamWebSession.IsCookie("eyJhbGciOiJFZERTQSJ9.eyJzdWIiOiIxIn0.assinatura"));
+    }
+
+    [Theory]
+    [InlineData("""["web:community"]""", 2000000000, true, null)]
+    [InlineData("""["web:store"]""", 2000000000, false, null)]
+    [InlineData("""["web:community"]""", 1000000000, true, "expirou")]
+    public void ChecksWhereTheCookieCameFromAndWhetherItExpired(string audiences, long expires, bool community, string? problem)
+    {
+        var payload = Convert.ToBase64String(Encoding.UTF8.GetBytes($$"""{"sub":"76561198000000001","aud":{{audiences}},"exp":{{expires}}}"""))
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        var session = new SteamWebSession($"76561198000000001%7C%7CeyJhbGciOiJFZERTQSJ9.{payload}.assinatura");
+
+        var found = session.Problem(DateTimeOffset.FromUnixTimeSeconds(1500000000));
+
+        Assert.Equal(community, session.IsForCommunity);
+        if (problem is null)
+        {
+            Assert.Null(found);
+        }
+        else
+        {
+            Assert.Contains(problem, found);
+        }
+    }
+
+    [Fact]
     public void ReadsTheSteamIdFromTheToken()
     {
         var payload = Convert.ToBase64String(Encoding.UTF8.GetBytes("""{"sub":"76561198000000001","aud":["web"]}""")).TrimEnd('=').Replace('+', '-').Replace('/', '_');
