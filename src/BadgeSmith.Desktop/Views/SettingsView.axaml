@@ -1,0 +1,29 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:BadgeSmith.Desktop.ViewModels"
+             x:Class="BadgeSmith.Desktop.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+  <ScrollViewer>
+    <StackPanel Spacing="16" Margin="8,16" MaxWidth="560" HorizontalAlignment="Left">
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <TextBlock FontWeight="SemiBold" Text="Farm de cartas" />
+          <TextBlock Classes="muted" TextWrapping="Wrap"
+                     Text="Jogos com menos horas que o limite rodam juntos até começarem a dropar; os demais rodam um por vez." />
+          <Grid ColumnDefinitions="*,160" RowDefinitions="Auto,Auto" RowSpacing="10">
+            <TextBlock Text="Horas antes de dropar" VerticalAlignment="Center" />
+            <NumericUpDown Grid.Column="1" Value="{Binding HoursBeforeDrops}" Minimum="0" Maximum="10" Increment="0.5" FormatString="0.0" />
+            <TextBlock Grid.Row="1" Text="Jogos ao mesmo tempo" VerticalAlignment="Center" />
+            <NumericUpDown Grid.Row="1" Grid.Column="1" Value="{Binding MaxConcurrentGames}" Minimum="1" Maximum="32" Increment="1" FormatString="0" />
+          </Grid>
+        </StackPanel>
+      </Border>
+      <Border Classes="card">
+        <Grid ColumnDefinitions="*,160">
+          <TextBlock Text="Tema" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding Themes}" SelectedIndex="{Binding ThemeIndex}" />
+        </Grid>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

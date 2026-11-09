@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\BadgeSmith.Core\BadgeSmith.Core.csproj" />
     <ProjectReference Include="..\..\src\BadgeSmith.Steam\BadgeSmith.Steam.csproj" />
+    <ProjectReference Include="..\..\src\BadgeSmith.Desktop\BadgeSmith.Desktop.csproj" />
   </ItemGroup>
 
 </Project>

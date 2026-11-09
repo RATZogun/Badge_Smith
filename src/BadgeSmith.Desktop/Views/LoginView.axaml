@@ -1,0 +1,46 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:BadgeSmith.Desktop.ViewModels"
+             x:Class="BadgeSmith.Desktop.Views.LoginView"
+             x:DataType="vm:LoginViewModel">
+  <ScrollViewer>
+    <Border Classes="card" Width="440" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="16,32">
+      <StackPanel Spacing="14">
+        <TextBlock Classes="title" Text="Entrar na Steam" />
+        <TextBlock Classes="muted" TextWrapping="Wrap"
+                   Text="Use a mesma conta que está logada no cliente da Steam." />
+        <StackPanel Orientation="Horizontal" Spacing="16">
+          <RadioButton GroupName="mode" Content="QR code" IsChecked="{Binding !UseCookie}" />
+          <RadioButton GroupName="mode" Content="Cookie steamLoginSecure" IsChecked="{Binding UseCookie}" />
+        </StackPanel>
+
+        <StackPanel Spacing="10" IsVisible="{Binding !UseCookie}">
+          <TextBlock TextWrapping="Wrap" Text="No app Steam do celular, abra o Steam Guard e escaneie o código." />
+          <Border Background="White" CornerRadius="8" Padding="8" HorizontalAlignment="Center" Width="256" Height="256">
+            <Panel>
+              <Image Source="{Binding QrCode}" Stretch="Uniform" />
+              <ProgressBar IsIndeterminate="True" Width="120" VerticalAlignment="Center"
+                           IsVisible="{Binding QrCode, Converter={x:Static ObjectConverters.IsNull}}" />
+            </Panel>
+          </Border>
+          <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" HorizontalAlignment="Center"
+                     Text="O código é renovado sozinho quando a Steam o troca." />
+        </StackPanel>
+
+        <StackPanel Spacing="10" IsVisible="{Binding UseCookie}">
+          <TextBlock TextWrapping="Wrap"
+                     Text="Entre em steamcommunity.com no navegador, abra as ferramentas de desenvolvedor (F12), vá em Armazenamento ou Application, Cookies, e copie o valor de steamLoginSecure." />
+          <TextBox PlaceholderText="Valor do cookie steamLoginSecure" PasswordChar="•" Text="{Binding Cookie}" IsEnabled="{Binding !IsBusy}" />
+          <Button Content="Entrar" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                  Classes="accent" Command="{Binding SignInWithCookieCommand}" IsDefault="True" />
+          <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
+                     Text="O cookie vale por cerca de um dia; quando expirar, o app pede outro." />
+          <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
+        </StackPanel>
+
+        <TextBlock Text="{Binding Message}" TextWrapping="Wrap"
+                   IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      </StackPanel>
+    </Border>
+  </ScrollViewer>
+</UserControl>

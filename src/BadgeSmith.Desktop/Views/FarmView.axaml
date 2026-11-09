@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:BadgeSmith.Desktop.ViewModels"
+             x:Class="BadgeSmith.Desktop.Views.FarmView"
+             x:DataType="vm:FarmViewModel">
+  <Grid RowDefinitions="Auto,Auto,*,Auto,150" Margin="8,12,8,0">
+    <Grid ColumnDefinitions="*,Auto">
+      <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="15" />
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+        <Button Content="Atualizar" Command="{Binding RefreshCommand}" />
+        <Button Content="Iniciar" Classes="accent" Command="{Binding StartCommand}" IsVisible="{Binding IsIdle}" />
+        <Button Content="Retomar" Classes="accent" Command="{Binding StartCommand}" IsVisible="{Binding IsPaused}" />
+        <Button Content="Pausar" Command="{Binding PauseCommand}" IsVisible="{Binding IsRunning}" />
+        <Button Content="Parar" Command="{Binding StopCommand}" />
+      </StackPanel>
+    </Grid>
+
+    <Grid Grid.Row="1" ColumnDefinitions="80,*,80,90,260" Margin="12,14,12,4">
+      <TextBlock Classes="muted" Text="Ignorar" />
+      <TextBlock Grid.Column="1" Classes="muted" Text="Jogo" />
+      <TextBlock Grid.Column="2" Classes="muted" Text="Cartas" HorizontalAlignment="Right" />
+      <TextBlock Grid.Column="3" Classes="muted" Text="Horas" HorizontalAlignment="Right" />
+      <TextBlock Grid.Column="4" Classes="muted" Text="Status" Margin="16,0,0,0" />
+    </Grid>
+
+    <ListBox Grid.Row="2" ItemsSource="{Binding Games}" Background="Transparent">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="vm:FarmGameViewModel">
+          <Grid ColumnDefinitions="80,*,80,90,260">
+            <CheckBox IsChecked="{Binding IsBlacklisted}" IsEnabled="{Binding CanChangeBlacklist}"
+                      ToolTip.Tip="Não farmar este jogo" />
+            <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <TextBlock Grid.Column="2" Text="{Binding RemainingDrops}" VerticalAlignment="Center" HorizontalAlignment="Right" />
+            <TextBlock Grid.Column="3" Text="{Binding HoursPlayed, StringFormat='{}{0:0.0} h'}" VerticalAlignment="Center" HorizontalAlignment="Right" />
+            <TextBlock Grid.Column="4" Text="{Binding Status}" VerticalAlignment="Center" Margin="16,0,0,0"
+                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Status}" />
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+
+    <TextBlock Grid.Row="3" Classes="muted" Text="Registro" Margin="4,12,0,4" />
+    <Border Grid.Row="4" Classes="card" Padding="8" Margin="0,0,0,8">
+      <ListBox Classes="log" ItemsSource="{Binding Log}" Background="Transparent" FontSize="12" />
+    </Border>
+  </Grid>
+</UserControl>

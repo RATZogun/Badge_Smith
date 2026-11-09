@@ -1,0 +1,20 @@
+<Window xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:BadgeSmith.Desktop.ViewModels"
+        xmlns:views="using:BadgeSmith.Desktop.Views"
+        x:Class="BadgeSmith.Desktop.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Badge Smith"
+        Width="1080" Height="720" MinWidth="780" MinHeight="540"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource AppBackgroundBrush}">
+  <Window.DataTemplates>
+    <DataTemplate DataType="vm:LoginViewModel">
+      <views:LoginView />
+    </DataTemplate>
+    <DataTemplate DataType="vm:ShellViewModel">
+      <views:ShellView />
+    </DataTemplate>
+  </Window.DataTemplates>
+  <ContentControl Content="{Binding Current}" />
+</Window>

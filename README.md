@@ -2,17 +2,18 @@
 
 Farma cartas colecionáveis da Steam e desbloqueia ou bloqueia conquistas, para Windows e Linux.
 
-> Em desenvolvimento: hoje o farm de cartas e as conquistas funcionam pela linha de comando. A interface gráfica vem
+> Em desenvolvimento: o app desktop já faz login, farm de cartas e edição de conquistas; os pacotes de instalação vêm
 > nas próximas etapas.
 
 ## Como funciona
 
 - **Steam aberta**: o Badge Smith usa a Steam já instalada e logada. Ele carrega o `steamclient` da própria instalação, então não distribui nenhuma biblioteca da Valve.
 - **"Jogar" um jogo**: para cada jogo, um processo auxiliar (`BadgeSmith.Agent`) define o `SteamAppId` e se conecta à Steam, que passa a mostrar você jogando e a contar o tempo de jogo.
-- **Login**: pela API de autenticação da Steam, com QR code aprovado no app Steam do celular ou com usuário, senha e
-  Steam Guard. A senha vai criptografada direto para a Steam e não é guardada. O que fica guardado é o token da sessão,
-  no cofre do sistema (Gerenciador de Credenciais no Windows, Secret Service no Linux).
-- **Cartas restantes**: lidas da sua página de badges com o cookie de sessão que a Steam gera a partir desse token.
+- **Login**: por QR code aprovado no app Steam do celular, pela API de autenticação da Steam, ou colando o cookie
+  `steamLoginSecure` de uma sessão aberta no navegador. A sessão fica no cofre do sistema (Gerenciador de Credenciais no
+  Windows, Secret Service no Linux). O QR gera um token que o app renova sozinho; o cookie colado vale por cerca de um
+  dia e o app pede outro quando ele expira.
+- **Cartas restantes**: lidas da sua página de badges com o cookie da sessão.
 - **Fila de farm**: jogos com menos de 2 h rodam juntos (até 30) para acumular tempo; os demais rodam um por vez, em ciclos de 15 min (5 min na última carta), relendo as badges a cada ciclo.
 - **Conquistas**: os nomes, descrições e ícones vêm do schema que a Steam guarda em `appcache/stats`; o estado de cada
   conquista é lido e gravado pela Steam. Conquistas protegidas (que só o servidor do jogo pode alterar) não são
@@ -24,11 +25,25 @@ Farma cartas colecionáveis da Steam e desbloqueia ou bloqueia conquistas, para 
 - Steam instalada, aberta e logada na mesma conta do login do Badge Smith
 - No Linux, um cofre compatível com o Secret Service (GNOME Keyring ou KWallet) e a `libsecret`
 
-## Rodar o protótipo
+## Rodar
 
 ```bash
 dotnet build BadgeSmith.slnx
-dotnet run --project src/BadgeSmith.Cli -- login   # QR code no terminal (ou --user <conta> para usuário e senha)
+dotnet run --project src/BadgeSmith.Desktop        # app desktop
+```
+
+O app tem três abas:
+
+- **Cartas**: jogos com cartas a dropar, horas jogadas e status de cada um; iniciar, pausar, retomar e parar o farm;
+  marcar jogos para ignorar.
+- **Conquistas**: biblioteca da conta com busca; marcar e desmarcar conquistas e gravar na Steam.
+- **Configurações**: horas antes de dropar, jogos ao mesmo tempo e tema claro, escuro ou do sistema. Ficam em
+  `settings.json`, na pasta `BadgeSmith` dentro de `~/.config` (Linux) ou `%APPDATA%` (Windows).
+
+A linha de comando continua disponível:
+
+```bash
+dotnet run --project src/BadgeSmith.Cli -- login   # QR code no terminal
 dotnet run --project src/BadgeSmith.Cli -- scan    # lista os jogos com cartas a dropar
 dotnet run --project src/BadgeSmith.Cli -- farm    # farma até acabar (Ctrl+C para parar)
 dotnet run --project src/BadgeSmith.Cli -- logout  # encerra a sessão na Steam e apaga do cofre
@@ -63,10 +78,11 @@ Fluxo de branches:
 Badge_Smith/
 ├── src/
 │   ├── BadgeSmith.Agent/    # processo auxiliar por jogo: joga o appId e lê ou grava as conquistas
-│   ├── BadgeSmith.Core/     # fila de farm, controle dos agentes e serviço de conquistas
+│   ├── BadgeSmith.Core/     # fila de farm, agentes, conquistas e configurações
 │   ├── BadgeSmith.Steam/    # login, cofre da sessão e leitura da página de badges
-│   └── BadgeSmith.Cli/      # linha de comando provisória (login, scan e farm)
-└── tests/BadgeSmith.Tests/  # testes do farm, do login, da leitura das badges e das conquistas
+│   ├── BadgeSmith.Desktop/  # app desktop em Avalonia: login, cartas, conquistas e configurações
+│   └── BadgeSmith.Cli/      # linha de comando (login, scan e farm)
+└── tests/BadgeSmith.Tests/  # testes do farm, do login, das badges, das conquistas e das telas
 ```
 
 ## Aviso
