@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace BadgeSmith.Core;
 
-public sealed class AgentAchievementClient(string agentPath) : IAchievementAgent
+public sealed class AgentAchievementClient(string agentPath, ulong? steamId = null) : IAchievementAgent
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(60);
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -35,6 +35,11 @@ public sealed class AgentAchievementClient(string agentPath) : IAchievementAgent
 
         startInfo.ArgumentList.Add("--parent-pid");
         startInfo.ArgumentList.Add(Environment.ProcessId.ToString());
+        if (steamId is { } id)
+        {
+            startInfo.ArgumentList.Add("--steam-id");
+            startInfo.ArgumentList.Add(id.ToString());
+        }
 
         Process? started;
         try
