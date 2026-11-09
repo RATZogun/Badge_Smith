@@ -19,6 +19,7 @@ public partial class FarmViewModel : ObservableObject, IDisposable
     private const int LogLimit = 200;
     private const string Waiting = "Na fila";
     private const string Ignored = "Ignorado pela lista";
+    private const string Skipped = "Pulado";
 
     private readonly Func<CancellationToken, Task<IReadOnlyList<Badge>>> _scan;
     private readonly Func<AgentLauncher> _createLauncher;
@@ -84,7 +85,7 @@ public partial class FarmViewModel : ObservableObject, IDisposable
             case FarmEvent.Farming farming:
                 var until = DateTime.Now + farming.Step.Duration;
                 var mode = farming.Step.Mode == FarmMode.Solo ? "sozinho" : "em lote";
-                foreach (var game in Games.Where(g => !g.IsBlacklisted && !g.Status.StartsWith("Pulado", StringComparison.Ordinal)))
+                foreach (var game in Games.Where(g => !g.IsBlacklisted && !g.Status.StartsWith(Skipped, StringComparison.Ordinal)))
                 {
                     game.Status = farming.Started.Contains(game.AppId) ? $"Jogando {mode} até {until:HH:mm}" : Waiting;
                 }
@@ -94,7 +95,7 @@ public partial class FarmViewModel : ObservableObject, IDisposable
             case FarmEvent.GameSkipped skipped:
                 if (Find(skipped.AppId) is { } skippedGame)
                 {
-                    skippedGame.Status = $"Pulado: {Clean(skipped.Reason)}";
+                    skippedGame.Status = $"{Skipped}: {Clean(skipped.Reason)}";
                 }
 
                 Write($"Jogo {Find(skipped.AppId)?.Name ?? skipped.AppId.ToString()} pulado: {Clean(skipped.Reason)}");
@@ -132,7 +133,7 @@ public partial class FarmViewModel : ObservableObject, IDisposable
             Summary = $"Não foi possível ler as badges: {error.Message}";
             _sessionExpired?.Invoke(error.Message);
         }
-        catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
+        catch (Exception error)
         {
             Summary = $"Não foi possível ler as badges: {error.Message}";
         }
@@ -151,6 +152,11 @@ public partial class FarmViewModel : ObservableObject, IDisposable
         _cancel = new CancellationTokenSource();
         State = FarmState.Running;
         SetBlacklistEditable(false);
+        foreach (var game in Games.Where(g => !g.IsBlacklisted && g.Status.StartsWith(Skipped, StringComparison.Ordinal)))
+        {
+            game.Status = Waiting;
+        }
+
         Write("Farm iniciado.");
         var finished = false;
         try
@@ -169,6 +175,12 @@ public partial class FarmViewModel : ObservableObject, IDisposable
             Write(Summary);
             finished = true;
             _sessionExpired?.Invoke(error.Message);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            Summary = $"Farm parado por um erro inesperado: {error.Message}";
+            Write(Summary);
+            finished = true;
         }
         finally
         {
