@@ -40,7 +40,9 @@ public partial class ShellViewModel : ObservableObject, IDisposable
         Achievements = new AchievementsViewModel(
             async ct => await _ownedGames.GetAsync(await session.OpenAsync(ct), ct),
             new AchievementService(new AgentAchievementClient(agentPath, session.SteamId)),
-            sessionExpired);
+            sessionExpired,
+            async ids => await _ownedGames.GetAchievementProgressAsync(await session.OpenAsync(CancellationToken.None), ids, CancellationToken.None),
+            _posters.LoadIconsAsync);
         Settings = new SettingsViewModel(settings);
 
         _ = CheckAccountAsync();

@@ -45,6 +45,28 @@ public sealed class PosterService(StoreAssetsClient? client = null, string? stea
         }
     }
 
+    public async Task LoadIconsAsync(IReadOnlyList<GameItemViewModel> games)
+    {
+        foreach (var game in games.Where(g => g.Icon is null && g.IconHash is not null))
+        {
+            var local = _steamRoot is null ? null : Path.Combine(_steamRoot, "appcache", "librarycache", game.AppId.ToString(), $"{game.IconHash}.jpg");
+            game.Icon = local is not null && File.Exists(local) ? TryOpen(() => new Bitmap(local)) : null;
+            if (game.Icon is not null)
+            {
+                continue;
+            }
+
+            try
+            {
+                var bytes = await _client.DownloadAsync(OwnedGamesClient.IconUrl(game.AppId, game.IconHash!), CancellationToken.None);
+                game.Icon = TryOpen(() => new Bitmap(new MemoryStream(bytes)));
+            }
+            catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
+            {
+            }
+        }
+    }
+
     public void Dispose() => _client.Dispose();
 
     public static string? FindLocalPoster(string steamRoot, uint appId)

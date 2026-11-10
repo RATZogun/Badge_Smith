@@ -1,7 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:BadgeSmith.Desktop.ViewModels"
-             xmlns:steam="using:BadgeSmith.Steam"
              xmlns:services="using:BadgeSmith.Desktop.Services"
              x:Class="BadgeSmith.Desktop.Views.AchievementsView"
              x:DataType="vm:AchievementsViewModel">
@@ -14,11 +13,24 @@
       </Grid>
       <ListBox ItemsSource="{Binding Games}" SelectedItem="{Binding SelectedGame}" Background="{DynamicResource CardBrush}" CornerRadius="8">
         <ListBox.ItemTemplate>
-          <DataTemplate x:DataType="steam:OwnedGame">
-            <StackPanel>
-              <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-              <TextBlock Classes="muted" FontSize="12" Text="{Binding HoursPlayed, Converter={x:Static services:PlayTime.Converter}, StringFormat='{}{0} jogadas'}" />
-            </StackPanel>
+          <DataTemplate x:DataType="vm:GameItemViewModel">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+              <Border Width="32" Height="32" Background="{DynamicResource CardBorderBrush}" VerticalAlignment="Center">
+                <Image Source="{Binding Icon}" Stretch="UniformToFill" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                  <TextBlock Classes="muted" FontSize="12"
+                             Text="{Binding HoursPlayed, Converter={x:Static services:PlayTime.Converter}, StringFormat='{}{0} jogadas'}" />
+                  <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding HasProgress}" ToolTip.Tip="Conquistas desbloqueadas">
+                    <Path Data="{StaticResource TrophyIcon}" Stroke="{DynamicResource IconBrush}" StrokeThickness="1.4"
+                          Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center" />
+                    <TextBlock Classes="muted" FontSize="12" Text="{Binding ProgressText}" />
+                  </StackPanel>
+                </StackPanel>
+              </StackPanel>
+            </Grid>
           </DataTemplate>
         </ListBox.ItemTemplate>
       </ListBox>

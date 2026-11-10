@@ -46,6 +46,20 @@ public class AchievementItemViewModelTests
         Assert.Equal(10u, Assert.Single(achievements.Games).AppId);
     }
 
+    [Fact]
+    public async Task ShowsTheProgressOfEachGame()
+    {
+        var achievements = new AchievementsViewModel(
+            _ => Task.FromResult<IReadOnlyList<OwnedGame>>([new OwnedGame(10, "Jogo", 1, true), new OwnedGame(20, "Outro", 1, true)]),
+            new AchievementService(new NoAgent()),
+            loadProgress: _ => Task.FromResult<IReadOnlyDictionary<uint, AchievementProgress>>(new Dictionary<uint, AchievementProgress> { [10] = new(22, 48) }));
+
+        await achievements.LoadGamesCommand.ExecuteAsync(null);
+
+        Assert.Equal("22/48", achievements.Games.Single(g => g.AppId == 10).ProgressText);
+        Assert.False(achievements.Games.Single(g => g.AppId == 20).HasProgress);
+    }
+
     private sealed class NoAgent : IAchievementAgent
     {
         public Task<IReadOnlyList<AchievementState>> ListAsync(uint appId, string language, CancellationToken cancellationToken) =>

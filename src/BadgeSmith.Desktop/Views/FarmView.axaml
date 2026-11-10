@@ -4,10 +4,6 @@
              xmlns:services="using:BadgeSmith.Desktop.Services"
              x:Class="BadgeSmith.Desktop.Views.FarmView"
              x:DataType="vm:FarmViewModel">
-  <UserControl.Resources>
-    <StreamGeometry x:Key="ClockIcon">M8,1.5 A6.5,6.5 0 1 1 7.99,1.5 Z M8,4.5 L8,8 L10.5,9.5</StreamGeometry>
-    <StreamGeometry x:Key="CardIcon">M4.5,1.5 L11.5,1.5 L11.5,14.5 L4.5,14.5 Z M6.5,5 L9.5,5</StreamGeometry>
-  </UserControl.Resources>
   <UserControl.Styles>
     <Style Selector="Border.pill">
       <Setter Property="VerticalAlignment" Value="Top" />
