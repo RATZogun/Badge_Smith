@@ -2,13 +2,13 @@ using BadgeSmith.Steam;
 
 namespace BadgeSmith.Desktop.Services;
 
-public sealed class SessionService : IDisposable
+public sealed class SessionService(ISessionVault? vault = null, SteamAuthApi? auth = null, OwnedGamesClient? check = null) : IDisposable
 {
-    private readonly ISessionVault _vault = SessionVault.ForCurrentSystem();
-    private readonly OwnedGamesClient _check = new();
+    private readonly ISessionVault _vault = vault ?? SessionVault.ForCurrentSystem();
+    private readonly OwnedGamesClient _check = check ?? new OwnedGamesClient();
     private string? _stored;
 
-    public SteamAuthApi Auth { get; } = new();
+    public SteamAuthApi Auth { get; } = auth ?? new SteamAuthApi();
 
     public ulong? SteamId => _stored switch
     {
