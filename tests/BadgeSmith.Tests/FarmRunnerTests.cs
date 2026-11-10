@@ -43,8 +43,8 @@ public class FarmRunnerTests
     {
         var scans = new Queue<IReadOnlyList<Badge>>(
         [
-            [new Badge(1, "Falha", 2, 5), new Badge(2, "Novo", 2, 0.5)],
-            [new Badge(1, "Falha", 2, 5), new Badge(2, "Novo", 0, 0.6)],
+            [new Badge(1, "Falha", 2, 0.5), new Badge(2, "Pronto", 2, 5)],
+            [new Badge(1, "Falha", 2, 0.5), new Badge(2, "Pronto", 0, 5.2)],
         ]);
         var launcher = new FakeLauncher(failing: 1);
         var events = new List<FarmEvent>();
