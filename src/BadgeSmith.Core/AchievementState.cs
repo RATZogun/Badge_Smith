@@ -7,7 +7,9 @@ public sealed record AchievementState(
     bool Hidden,
     bool Protected,
     bool? Achieved,
-    DateTimeOffset? UnlockTime);
+    DateTimeOffset? UnlockTime,
+    string? Icon = null,
+    string? IconGray = null);
 
 public sealed record AchievementChange(string Api, bool Ok, string? Error);
 
