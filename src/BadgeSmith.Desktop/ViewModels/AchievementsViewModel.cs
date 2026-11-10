@@ -23,8 +23,12 @@ public partial class AchievementsViewModel : ObservableObject
     private OwnedGame? _selectedGame;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(ReloadCommand), nameof(LoadGamesCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(ReloadCommand))]
     private bool _isBusy;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(LoadGamesCommand))]
+    private bool _isLoadingGames;
 
     [ObservableProperty]
     private string? _message;
@@ -50,10 +54,10 @@ public partial class AchievementsViewModel : ObservableObject
 
     public static string Language => CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "pt" ? "brazilian" : "english";
 
-    [RelayCommand(CanExecute = nameof(IsIdle))]
+    [RelayCommand(CanExecute = nameof(CanLoadGames))]
     private async Task LoadGamesAsync()
     {
-        IsBusy = true;
+        IsLoadingGames = true;
         GamesSummary = "Carregando a biblioteca...";
         try
         {
@@ -65,15 +69,17 @@ public partial class AchievementsViewModel : ObservableObject
             GamesSummary = $"Não foi possível carregar a biblioteca: {error.Message}";
             _sessionExpired?.Invoke(error.Message);
         }
-        catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
+        catch (Exception error)
         {
             GamesSummary = $"Não foi possível carregar a biblioteca: {error.Message}";
         }
         finally
         {
-            IsBusy = false;
+            IsLoadingGames = false;
         }
     }
+
+    private bool CanLoadGames() => !IsLoadingGames;
 
     partial void OnFilterChanged(string value) => ApplyFilter();
 
@@ -137,6 +143,10 @@ public partial class AchievementsViewModel : ObservableObject
         {
             Message = Describe(error);
         }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            Message = $"Não foi possível gravar: {error.Message}";
+        }
         finally
         {
             IsBusy = false;
@@ -183,6 +193,13 @@ public partial class AchievementsViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
+        }
+        catch (Exception error)
+        {
+            if (SelectedGame == game)
+            {
+                Message = $"Não foi possível ler as conquistas: {error.Message}";
+            }
         }
         finally
         {
