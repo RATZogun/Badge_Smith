@@ -4,6 +4,13 @@
              xmlns:services="using:BadgeSmith.Desktop.Services"
              x:Class="BadgeSmith.Desktop.Views.AchievementsView"
              x:DataType="vm:AchievementsViewModel">
+  <UserControl.Styles>
+    <Style Selector="Border.achievementIcon">
+      <Setter Property="Background" Value="{DynamicResource CardBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+    </Style>
+  </UserControl.Styles>
   <Grid ColumnDefinitions="300,*" Margin="8,12,8,8">
     <DockPanel Margin="0,0,12,0">
       <TextBox DockPanel.Dock="Top" PlaceholderText="Buscar jogo ou appId" Text="{Binding Filter}" />
@@ -53,9 +60,13 @@
       <ListBox ItemsSource="{Binding Achievements}" Margin="0,8,0,0" Background="Transparent">
         <ListBox.ItemTemplate>
           <DataTemplate x:DataType="vm:AchievementItemViewModel">
-            <Grid ColumnDefinitions="Auto,*" Margin="0,2">
-              <CheckBox IsChecked="{Binding IsChecked}" IsEnabled="{Binding CanChange}" VerticalAlignment="Top" />
-              <StackPanel Grid.Column="1" Spacing="2" Margin="4,4,0,0">
+            <Grid ColumnDefinitions="Auto,Auto,*" Margin="0,4">
+              <CheckBox IsChecked="{Binding IsChecked}" IsEnabled="{Binding CanChange}" VerticalAlignment="Center" />
+              <Border Grid.Column="1" Classes="achievementIcon" Width="56" Height="56"
+                      Margin="4,0,12,0" VerticalAlignment="Center">
+                <Image Source="{Binding Icon}" Stretch="UniformToFill" />
+              </Border>
+              <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center">
                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
                 <TextBlock Text="{Binding Description}" TextWrapping="Wrap" />
                 <StackPanel Orientation="Horizontal" Spacing="8">

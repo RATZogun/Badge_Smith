@@ -1,3 +1,4 @@
+using Avalonia.Media.Imaging;
 using BadgeSmith.Core;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -9,7 +10,13 @@ public partial class AchievementItemViewModel(AchievementState state) : Observab
     [NotifyPropertyChangedFor(nameof(IsChanged))]
     private bool _isChecked = state.Achieved == true;
 
+    [ObservableProperty]
+    private Bitmap? _icon;
+
     public string Api { get; } = state.Api;
+
+    public string? IconFile { get; } = state.Achieved == true ? state.Icon ?? state.IconGray : state.IconGray ?? state.Icon;
+
 
     public string Name { get; } = state.Name.Length > 0 ? state.Name : state.Api;
 

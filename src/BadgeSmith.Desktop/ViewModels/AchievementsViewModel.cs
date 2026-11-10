@@ -14,6 +14,7 @@ public partial class AchievementsViewModel : ObservableObject
     private readonly Action<string>? _sessionExpired;
     private readonly Func<IReadOnlyList<uint>, Task<IReadOnlyDictionary<uint, AchievementProgress>>>? _loadProgress;
     private readonly Func<IReadOnlyList<GameItemViewModel>, Task>? _loadIcons;
+    private readonly Func<uint, IReadOnlyList<AchievementItemViewModel>, Task>? _loadAchievementIcons;
     private IReadOnlyList<GameItemViewModel> _allGames = [];
     private CancellationTokenSource? _loading;
 
@@ -43,8 +44,10 @@ public partial class AchievementsViewModel : ObservableObject
         AchievementService service,
         Action<string>? sessionExpired = null,
         Func<IReadOnlyList<uint>, Task<IReadOnlyDictionary<uint, AchievementProgress>>>? loadProgress = null,
-        Func<IReadOnlyList<GameItemViewModel>, Task>? loadIcons = null)
+        Func<IReadOnlyList<GameItemViewModel>, Task>? loadIcons = null,
+        Func<uint, IReadOnlyList<AchievementItemViewModel>, Task>? loadAchievementIcons = null)
     {
+        _loadAchievementIcons = loadAchievementIcons;
         _loadGames = loadGames;
         _service = service;
         _sessionExpired = sessionExpired;
@@ -218,6 +221,10 @@ public partial class AchievementsViewModel : ObservableObject
             else
             {
                 game.Progress = new AchievementProgress(Achievements.Count(a => a.IsAchieved), Achievements.Count);
+                if (_loadAchievementIcons is not null)
+                {
+                    _ = _loadAchievementIcons(game.AppId, [.. Achievements]);
+                }
             }
         }
         catch (AchievementAgentException error)

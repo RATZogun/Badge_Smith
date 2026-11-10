@@ -5,9 +5,12 @@ using BadgeSmith.Steam;
 
 namespace BadgeSmith.Desktop.Services;
 
-public sealed class PosterService(StoreAssetsClient? client = null, string? steamRoot = null) : IDisposable
+public sealed class PosterService(StoreAssetsClient? client = null, string? steamRoot = null, AchievementIconClient? achievementIcons = null) : IDisposable
 {
+    private const int ParallelDownloads = 6;
+
     private readonly StoreAssetsClient _client = client ?? new StoreAssetsClient();
+    private readonly AchievementIconClient _achievementIcons = achievementIcons ?? new AchievementIconClient();
     private readonly string? _steamRoot = steamRoot ?? SteamInstall.FindRoot();
 
     public async Task LoadAsync(IReadOnlyList<FarmGameViewModel> games)
@@ -67,7 +70,32 @@ public sealed class PosterService(StoreAssetsClient? client = null, string? stea
         }
     }
 
-    public void Dispose() => _client.Dispose();
+    public async Task LoadAchievementIconsAsync(uint appId, IReadOnlyList<AchievementItemViewModel> items)
+    {
+        using var slots = new SemaphoreSlim(ParallelDownloads);
+        await Task.WhenAll(items.Where(i => i.Icon is null && i.IconFile is not null).Select(async item =>
+        {
+            await slots.WaitAsync();
+            try
+            {
+                var bytes = await _achievementIcons.DownloadAsync(appId, item.IconFile!, CancellationToken.None);
+                item.Icon = TryOpen(() => new Bitmap(new MemoryStream(bytes)));
+            }
+            catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
+            {
+            }
+            finally
+            {
+                slots.Release();
+            }
+        }));
+    }
+
+    public void Dispose()
+    {
+        _client.Dispose();
+        _achievementIcons.Dispose();
+    }
 
     public static string? FindLocalPoster(string steamRoot, uint appId)
     {
