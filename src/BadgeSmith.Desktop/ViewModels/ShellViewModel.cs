@@ -12,6 +12,7 @@ public partial class ShellViewModel : ObservableObject, IDisposable
     private readonly string _agentPath;
     private readonly RenewingBadgeScanner _scanner;
     private readonly OwnedGamesClient _ownedGames = new();
+    private readonly PosterService _posters = new();
     private readonly CancellationTokenSource _cancel = new();
     private readonly Func<Task> _logout;
 
@@ -33,7 +34,9 @@ public partial class ShellViewModel : ObservableObject, IDisposable
             sessionExpired,
             session.CanReadBadges
                 ? null
-                : "O cookie usado no login é da loja e não lê as badges da comunidade. Para farmar cartas, saia e entre com o steamLoginSecure copiado com steamcommunity.com aberto. As conquistas funcionam normalmente.");
+                : "O cookie usado no login é da loja e não lê as badges da comunidade. Para farmar cartas, saia e entre com o steamLoginSecure copiado com steamcommunity.com aberto. As conquistas funcionam normalmente.",
+            () => _scanner.AccountLimited,
+            _posters.LoadAsync);
         Achievements = new AchievementsViewModel(
             async ct => await _ownedGames.GetAsync(await session.OpenAsync(ct), ct),
             new AchievementService(new AgentAchievementClient(agentPath, session.SteamId)),
@@ -62,6 +65,7 @@ public partial class ShellViewModel : ObservableObject, IDisposable
         Farm.Dispose();
         _scanner.Dispose();
         _ownedGames.Dispose();
+        _posters.Dispose();
     }
 
     [RelayCommand]

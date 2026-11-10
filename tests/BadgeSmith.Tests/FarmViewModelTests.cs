@@ -66,6 +66,21 @@ public sealed class FarmViewModelTests : IDisposable
         Assert.Equal("Ignorado pela lista", farm.Games.Single(g => g.AppId == 10).Status);
     }
 
+    [Fact]
+    public void WarnsWhenTheAccountIsLimited()
+    {
+        bool? limited = null;
+        var farm = new FarmViewModel(_ => Task.FromResult<IReadOnlyList<Badge>>([]), () => throw new InvalidOperationException(), _settings, accountLimited: () => limited);
+        Badge[] withDrops = [new(10, "A", 3, 0.5)];
+
+        farm.Apply(new FarmEvent.Scanned(withDrops, withDrops));
+        Assert.Null(farm.LimitedWarning);
+
+        limited = true;
+        farm.Apply(new FarmEvent.Scanned(withDrops, withDrops));
+        Assert.Contains("limitada", farm.LimitedWarning);
+    }
+
     private FarmViewModel NewFarm() =>
         new(_ => Task.FromResult<IReadOnlyList<Badge>>([]), () => throw new InvalidOperationException("não deveria iniciar agentes"), _settings);
 }

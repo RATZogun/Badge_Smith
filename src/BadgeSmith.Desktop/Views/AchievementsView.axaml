@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:BadgeSmith.Desktop.ViewModels"
              xmlns:steam="using:BadgeSmith.Steam"
+             xmlns:services="using:BadgeSmith.Desktop.Services"
              x:Class="BadgeSmith.Desktop.Views.AchievementsView"
              x:DataType="vm:AchievementsViewModel">
   <Grid ColumnDefinitions="300,*" Margin="8,12,8,8">
@@ -16,7 +17,7 @@
           <DataTemplate x:DataType="steam:OwnedGame">
             <StackPanel>
               <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-              <TextBlock Classes="muted" FontSize="12" Text="{Binding HoursPlayed, StringFormat='{}{0:0.0} h jogadas'}" />
+              <TextBlock Classes="muted" FontSize="12" Text="{Binding HoursPlayed, Converter={x:Static services:PlayTime.Converter}, StringFormat='{}{0} jogadas'}" />
             </StackPanel>
           </DataTemplate>
         </ListBox.ItemTemplate>
