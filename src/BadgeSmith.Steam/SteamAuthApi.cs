@@ -1,6 +1,5 @@
 using System.Net;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 
 namespace BadgeSmith.Steam;
@@ -29,7 +28,6 @@ public sealed class SteamAuthApi : IDisposable
 {
     private const string DeviceName = "Badge Smith";
     private const int WebBrowserPlatform = 2;
-    private const int PersistentSession = 1;
     private const int PermanentRevoke = 1;
     private const string Website = "Community";
     private const string ServiceUrl = "https://api.steampowered.com/IAuthenticationService/";
@@ -61,47 +59,6 @@ public sealed class SteamAuthApi : IDisposable
             Confirmations(response.Messages(5)),
             0,
             response.String(2));
-    }
-
-    public async Task<SteamAuthSession> BeginWithCredentialsAsync(string accountName, string password, CancellationToken cancellationToken)
-    {
-        var key = await CallAsync("GetPasswordRSAPublicKey", new ProtoWriter().String(1, accountName), HttpMethod.Get, cancellationToken);
-        using var rsa = RSA.Create();
-        rsa.ImportParameters(new RSAParameters
-        {
-            Modulus = Convert.FromHexString(key.String(1)),
-            Exponent = Convert.FromHexString(key.String(2)),
-        });
-        var encrypted = Convert.ToBase64String(rsa.Encrypt(Encoding.UTF8.GetBytes(password), RSAEncryptionPadding.Pkcs1));
-
-        var request = new ProtoWriter()
-            .String(1, DeviceName)
-            .String(2, accountName)
-            .String(3, encrypted)
-            .Varint(4, key.Varint(3))
-            .Bool(5, true)
-            .Varint(6, WebBrowserPlatform)
-            .Varint(7, PersistentSession)
-            .String(8, Website)
-            .Message(9, DeviceDetails());
-        var response = await CallAsync("BeginAuthSessionViaCredentials", request, HttpMethod.Post, cancellationToken);
-        return new SteamAuthSession(
-            response.Varint(1),
-            response.Bytes(2),
-            Interval(response.Float(3)),
-            Confirmations(response.Messages(4)),
-            response.Varint(5),
-            null);
-    }
-
-    public async Task SubmitGuardCodeAsync(SteamAuthSession session, string code, SteamGuardType type, CancellationToken cancellationToken)
-    {
-        var request = new ProtoWriter()
-            .Varint(1, session.ClientId)
-            .Fixed64(2, session.SteamId)
-            .String(3, code)
-            .Varint(4, (ulong)type);
-        await CallAsync("UpdateAuthSessionWithSteamGuardCode", request, HttpMethod.Post, cancellationToken);
     }
 
     public async Task<SteamAuthPoll> PollAsync(ulong clientId, byte[] requestId, CancellationToken cancellationToken)
@@ -181,26 +138,7 @@ public sealed class SteamAuthApi : IDisposable
 
     public void Dispose() => _http.Dispose();
 
-    public static ulong? SteamIdFromToken(string token)
-    {
-        var parts = token.Split('.');
-        if (parts.Length != 3)
-        {
-            return null;
-        }
-
-        try
-        {
-            var payload = parts[1].Replace('-', '+').Replace('_', '/');
-            payload = payload.PadRight(payload.Length + ((4 - (payload.Length % 4)) % 4), '=');
-            using var json = JsonDocument.Parse(Convert.FromBase64String(payload));
-            return json.RootElement.TryGetProperty("sub", out var sub) && ulong.TryParse(sub.GetString(), out var steamId) ? steamId : null;
-        }
-        catch (Exception error) when (error is FormatException or JsonException or InvalidOperationException)
-        {
-            return null;
-        }
-    }
+    public static ulong? SteamIdFromToken(string token) => SteamToken.Read(token)?.SteamId;
 
     public static string? LoginCookie(IEnumerable<string> setCookieHeaders) =>
         setCookieHeaders
@@ -236,9 +174,7 @@ public sealed class SteamAuthApi : IDisposable
 
     private static string Describe(int result, string? detail) => result switch
     {
-        5 => "Usuário ou senha incorretos.",
         9 or 27 => "O pedido de login expirou. Comece de novo.",
-        65 or 88 => "Código do Steam Guard incorreto.",
         84 => "Muitas tentativas de login. Espere alguns minutos e tente de novo.",
         _ => $"A Steam recusou o login (EResult {result}{(string.IsNullOrEmpty(detail) ? "" : $": {detail}")}).",
     };
