@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using BadgeSmith.Core;
 using BadgeSmith.Desktop.Services;
 using BadgeSmith.Desktop.ViewModels;
@@ -15,6 +16,12 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        Dispatcher.UIThread.UnhandledException += (_, e) =>
+        {
+            Console.Error.WriteLine($"Erro não tratado: {e.Exception}");
+            e.Handled = true;
+        };
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var settings = new SettingsService(SettingsStore.ForCurrentUser());
