@@ -14,7 +14,7 @@ Farma cartas colecionáveis da Steam e desbloqueia ou bloqueia conquistas, para 
   Windows, Secret Service no Linux). O QR gera um token que o app renova sozinho; o cookie colado vale por cerca de um
   dia e o app pede outro quando ele expira.
 - **Cartas restantes**: lidas da sua página de badges com o cookie da sessão.
-- **Fila de farm**: jogos com menos de 2 h rodam juntos (até 30) para acumular tempo; os demais rodam um por vez, em ciclos de 15 min (5 min na última carta), relendo as badges a cada ciclo.
+- **Fila de farm**: primeiro os jogos com menos de 2 h rodam juntos (até 30) para acumular tempo; depois os demais rodam um por vez, em ciclos de 15 min (5 min na última carta), relendo as badges a cada ciclo.
 - **Conquistas**: os nomes, descrições e ícones vêm do schema que a Steam guarda em `appcache/stats`; o estado de cada
   conquista é lido e gravado pela Steam. Conquistas protegidas (que só o servidor do jogo pode alterar) não são
   tocadas.

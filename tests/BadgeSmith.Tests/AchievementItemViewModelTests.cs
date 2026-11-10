@@ -30,6 +30,15 @@ public class AchievementItemViewModelTests
     }
 
     [Fact]
+    public void UsesTheColorIconOnlyWhenUnlocked()
+    {
+        var locked = new AchievementItemViewModel(new AchievementState("A", "A", "", false, false, false, null, "cor.jpg", "cinza.jpg"));
+        var unlocked = new AchievementItemViewModel(new AchievementState("B", "B", "", false, false, true, null, "cor.jpg", "cinza.jpg"));
+
+        Assert.Equal(("cinza.jpg", "cor.jpg"), (locked.IconFile, unlocked.IconFile));
+    }
+
+    [Fact]
     public async Task OffersAnAppIdThatIsNotInTheLibrary()
     {
         var achievements = new AchievementsViewModel(
@@ -44,6 +53,20 @@ public class AchievementItemViewModelTests
 
         achievements.Filter = "10";
         Assert.Equal(10u, Assert.Single(achievements.Games).AppId);
+    }
+
+    [Fact]
+    public async Task ShowsTheProgressOfEachGame()
+    {
+        var achievements = new AchievementsViewModel(
+            _ => Task.FromResult<IReadOnlyList<OwnedGame>>([new OwnedGame(10, "Jogo", 1, true), new OwnedGame(20, "Outro", 1, true)]),
+            new AchievementService(new NoAgent()),
+            loadProgress: _ => Task.FromResult<IReadOnlyDictionary<uint, AchievementProgress>>(new Dictionary<uint, AchievementProgress> { [10] = new(22, 48) }));
+
+        await achievements.LoadGamesCommand.ExecuteAsync(null);
+
+        Assert.Equal("22/48", achievements.Games.Single(g => g.AppId == 10).ProgressText);
+        Assert.False(achievements.Games.Single(g => g.AppId == 20).HasProgress);
     }
 
     private sealed class NoAgent : IAchievementAgent

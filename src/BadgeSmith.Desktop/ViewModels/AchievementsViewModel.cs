@@ -12,7 +12,10 @@ public partial class AchievementsViewModel : ObservableObject
     private readonly Func<CancellationToken, Task<IReadOnlyList<OwnedGame>>> _loadGames;
     private readonly AchievementService _service;
     private readonly Action<string>? _sessionExpired;
-    private IReadOnlyList<OwnedGame> _allGames = [];
+    private readonly Func<IReadOnlyList<uint>, Task<IReadOnlyDictionary<uint, AchievementProgress>>>? _loadProgress;
+    private readonly Func<IReadOnlyList<GameItemViewModel>, Task>? _loadIcons;
+    private readonly Func<uint, IReadOnlyList<AchievementItemViewModel>, Task>? _loadAchievementIcons;
+    private IReadOnlyList<GameItemViewModel> _allGames = [];
     private CancellationTokenSource? _loading;
 
     [ObservableProperty]
@@ -20,7 +23,7 @@ public partial class AchievementsViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasGame))]
-    private OwnedGame? _selectedGame;
+    private GameItemViewModel? _selectedGame;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(ReloadCommand))]
@@ -39,14 +42,20 @@ public partial class AchievementsViewModel : ObservableObject
     public AchievementsViewModel(
         Func<CancellationToken, Task<IReadOnlyList<OwnedGame>>> loadGames,
         AchievementService service,
-        Action<string>? sessionExpired = null)
+        Action<string>? sessionExpired = null,
+        Func<IReadOnlyList<uint>, Task<IReadOnlyDictionary<uint, AchievementProgress>>>? loadProgress = null,
+        Func<IReadOnlyList<GameItemViewModel>, Task>? loadIcons = null,
+        Func<uint, IReadOnlyList<AchievementItemViewModel>, Task>? loadAchievementIcons = null)
     {
+        _loadAchievementIcons = loadAchievementIcons;
         _loadGames = loadGames;
         _service = service;
         _sessionExpired = sessionExpired;
+        _loadProgress = loadProgress;
+        _loadIcons = loadIcons;
     }
 
-    public ObservableCollection<OwnedGame> Games { get; } = [];
+    public ObservableCollection<GameItemViewModel> Games { get; } = [];
 
     public ObservableCollection<AchievementItemViewModel> Achievements { get; } = [];
 
@@ -61,8 +70,9 @@ public partial class AchievementsViewModel : ObservableObject
         GamesSummary = "Carregando a biblioteca...";
         try
         {
-            _allGames = (await _loadGames(CancellationToken.None)).Where(g => g.HasAchievements).ToList();
+            _allGames = (await _loadGames(CancellationToken.None)).Where(g => g.HasAchievements).Select(g => new GameItemViewModel(g)).ToList();
             ApplyFilter();
+            _ = LoadDetailsAsync(_allGames);
         }
         catch (Exception error) when (error is SteamSessionExpiredException or SteamAuthException)
         {
@@ -83,7 +93,7 @@ public partial class AchievementsViewModel : ObservableObject
 
     partial void OnFilterChanged(string value) => ApplyFilter();
 
-    partial void OnSelectedGameChanged(OwnedGame? value)
+    partial void OnSelectedGameChanged(GameItemViewModel? value)
     {
         Achievements.Clear();
         Message = null;
@@ -159,7 +169,32 @@ public partial class AchievementsViewModel : ObservableObject
 
     private bool IsIdle() => !IsBusy;
 
-    private async Task LoadAchievementsAsync(OwnedGame game)
+    private async Task LoadDetailsAsync(IReadOnlyList<GameItemViewModel> games)
+    {
+        if (_loadIcons is not null)
+        {
+            _ = _loadIcons(games);
+        }
+
+        if (_loadProgress is null || games.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var progress = await _loadProgress([.. games.Select(g => g.AppId)]);
+            foreach (var game in games)
+            {
+                game.Progress = progress.GetValueOrDefault(game.AppId) ?? game.Progress;
+            }
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    private async Task LoadAchievementsAsync(GameItemViewModel game)
     {
         _loading?.Cancel();
         var loading = _loading = new CancellationTokenSource();
@@ -182,6 +217,14 @@ public partial class AchievementsViewModel : ObservableObject
             if (Achievements.Count == 0)
             {
                 Message = "Este jogo não tem conquistas.";
+            }
+            else
+            {
+                game.Progress = new AchievementProgress(Achievements.Count(a => a.IsAchieved), Achievements.Count);
+                if (_loadAchievementIcons is not null)
+                {
+                    _ = _loadAchievementIcons(game.AppId, [.. Achievements]);
+                }
             }
         }
         catch (AchievementAgentException error)
@@ -225,7 +268,7 @@ public partial class AchievementsViewModel : ObservableObject
         Games.Clear();
         if (uint.TryParse(filter, out var appId) && appId > 0 && _allGames.All(g => g.AppId != appId))
         {
-            Games.Add(selected?.AppId == appId ? selected : new OwnedGame(appId, $"App {appId}", 0, true));
+            Games.Add(selected?.AppId == appId ? selected : new GameItemViewModel(new OwnedGame(appId, $"App {appId}", 0, true)));
         }
 
         foreach (var game in _allGames.Where(g => filter.Length == 0 || g.Name.Contains(filter, StringComparison.CurrentCultureIgnoreCase) || g.AppId.ToString() == filter))

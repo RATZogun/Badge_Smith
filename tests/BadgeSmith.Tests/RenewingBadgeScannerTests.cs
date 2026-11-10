@@ -50,6 +50,8 @@ public class RenewingBadgeScannerTests
     {
         private bool _expired = expired;
 
+        public bool? AccountLimited => null;
+
         public void Expire() => _expired = true;
 
         public Task<IReadOnlyList<Badge>> ScanAsync(CancellationToken cancellationToken = default) =>

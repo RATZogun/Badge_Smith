@@ -1,9 +1,35 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:BadgeSmith.Desktop.ViewModels"
+             xmlns:services="using:BadgeSmith.Desktop.Services"
              x:Class="BadgeSmith.Desktop.Views.FarmView"
              x:DataType="vm:FarmViewModel">
-  <Grid RowDefinitions="Auto,Auto,*,Auto,150" Margin="8,12,8,0">
+  <UserControl.Styles>
+    <Style Selector="Border.pill">
+      <Setter Property="VerticalAlignment" Value="Top" />
+      <Setter Property="Margin" Value="8" />
+      <Setter Property="Padding" Value="7,3" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Background" Value="#B3000000" />
+    </Style>
+    <Style Selector="Border.pill TextBlock">
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Border.pill Path">
+      <Setter Property="Stroke" Value="White" />
+      <Setter Property="StrokeThickness" Value="1.5" />
+      <Setter Property="Width" Value="12" />
+      <Setter Property="Height" Value="12" />
+      <Setter Property="Stretch" Value="Uniform" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Grid.poster.ignored Image">
+      <Setter Property="Opacity" Value="0.35" />
+    </Style>
+  </UserControl.Styles>
+  <Grid RowDefinitions="Auto,Auto,*,Auto,100" Margin="8,12,8,0">
     <Grid ColumnDefinitions="*,Auto">
       <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="15" />
       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
@@ -15,29 +41,61 @@
       </StackPanel>
     </Grid>
 
-    <Grid Grid.Row="1" ColumnDefinitions="80,*,80,90,260" Margin="12,14,12,4">
-      <TextBlock Classes="muted" Text="Ignorar" />
-      <TextBlock Grid.Column="1" Classes="muted" Text="Jogo" />
-      <TextBlock Grid.Column="2" Classes="muted" Text="Cartas" HorizontalAlignment="Right" />
-      <TextBlock Grid.Column="3" Classes="muted" Text="Horas" HorizontalAlignment="Right" />
-      <TextBlock Grid.Column="4" Classes="muted" Text="Status" Margin="16,0,0,0" />
-    </Grid>
+    <Border Grid.Row="1" Classes="warning" Margin="0,12,0,0"
+            IsVisible="{Binding LimitedWarning, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <TextBlock Text="{Binding LimitedWarning}" TextWrapping="Wrap" />
+    </Border>
 
-    <ListBox Grid.Row="2" ItemsSource="{Binding Games}" Background="Transparent">
-      <ListBox.ItemTemplate>
-        <DataTemplate x:DataType="vm:FarmGameViewModel">
-          <Grid ColumnDefinitions="80,*,80,90,260">
-            <CheckBox IsChecked="{Binding IsBlacklisted}" IsEnabled="{Binding CanChangeBlacklist}"
-                      ToolTip.Tip="Não farmar este jogo" />
-            <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-            <TextBlock Grid.Column="2" Text="{Binding RemainingDrops}" VerticalAlignment="Center" HorizontalAlignment="Right" />
-            <TextBlock Grid.Column="3" Text="{Binding HoursPlayed, StringFormat='{}{0:0.0} h'}" VerticalAlignment="Center" HorizontalAlignment="Right" />
-            <TextBlock Grid.Column="4" Text="{Binding Status}" VerticalAlignment="Center" Margin="16,0,0,0"
-                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Status}" />
-          </Grid>
-        </DataTemplate>
-      </ListBox.ItemTemplate>
-    </ListBox>
+    <ScrollViewer Grid.Row="2" Margin="0,12,0,0">
+      <ItemsControl ItemsSource="{Binding Games}" HorizontalAlignment="Center">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:FarmGameViewModel">
+            <Grid Classes="poster" Classes.ignored="{Binding IsBlacklisted}" Width="180" Height="270" Margin="0,0,12,12"
+                  Background="{DynamicResource CardBrush}" ClipToBounds="True">
+              <TextBlock Text="{Binding Name}" Margin="12" TextWrapping="Wrap" VerticalAlignment="Center" HorizontalAlignment="Center"
+                         TextAlignment="Center" Classes="muted"
+                         IsVisible="{Binding Poster, Converter={x:Static ObjectConverters.IsNull}}" />
+              <Image Source="{Binding Poster}" Stretch="UniformToFill" />
+              <Border VerticalAlignment="Bottom" Padding="10,36,10,8">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                    <GradientStop Offset="0" Color="#00000000" />
+                    <GradientStop Offset="0.4" Color="#B0000000" />
+                    <GradientStop Offset="1" Color="#E8000000" />
+                  </LinearGradientBrush>
+                </Border.Background>
+                <StackPanel Spacing="3">
+                  <TextBlock Text="{Binding Name}" Foreground="White" FontWeight="SemiBold" TextWrapping="Wrap"
+                             MaxLines="2" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="{Binding Status}" Foreground="#D9FFFFFF" FontSize="11" TextTrimming="CharacterEllipsis"
+                             ToolTip.Tip="{Binding Status}" />
+                  <CheckBox Content="Ignorar" Foreground="White" FontSize="11" MinHeight="0" Padding="6,0,0,0"
+                            IsChecked="{Binding IsBlacklisted}" IsEnabled="{Binding CanChangeBlacklist}"
+                            ToolTip.Tip="Não farmar este jogo" />
+                </StackPanel>
+              </Border>
+              <Border Classes="pill" HorizontalAlignment="Left">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                  <Path Data="{StaticResource ClockIcon}" />
+                  <TextBlock Text="{Binding HoursPlayed, Converter={x:Static services:PlayTime.Converter}}" />
+                </StackPanel>
+              </Border>
+              <Border Classes="pill" HorizontalAlignment="Right" ToolTip.Tip="Cartas a dropar">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                  <Path Data="{StaticResource CardIcon}" />
+                  <TextBlock Text="{Binding RemainingDrops}" />
+                </StackPanel>
+              </Border>
+            </Grid>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
 
     <TextBlock Grid.Row="3" Classes="muted" Text="Registro" Margin="4,12,0,4" />
     <Border Grid.Row="4" Classes="card" Padding="8" Margin="0,0,0,8">

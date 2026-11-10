@@ -40,13 +40,23 @@ public partial class FarmViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _summary = "Atualize a lista para ver os jogos com cartas a dropar.";
 
+    [ObservableProperty]
+    private string? _limitedWarning;
+
+    private readonly Func<bool?> _accountLimited;
+    private readonly Func<IReadOnlyList<FarmGameViewModel>, Task>? _loadPosters;
+
     public FarmViewModel(
         Func<CancellationToken, Task<IReadOnlyList<Badge>>> scan,
         Func<AgentLauncher> createLauncher,
         SettingsService settings,
         Action<string>? sessionExpired = null,
-        string? unavailableReason = null)
+        string? unavailableReason = null,
+        Func<bool?>? accountLimited = null,
+        Func<IReadOnlyList<FarmGameViewModel>, Task>? loadPosters = null)
     {
+        _loadPosters = loadPosters;
+        _accountLimited = accountLimited ?? (() => null);
         _scan = scan;
         _createLauncher = createLauncher;
         _settings = settings;
@@ -80,6 +90,7 @@ public partial class FarmViewModel : ObservableObject, IDisposable
         {
             case FarmEvent.Scanned scanned:
                 UpdateGames(scanned.WithDrops);
+                UpdateLimitedWarning();
                 Summary = $"{scanned.GamesWithDrops} jogo(s) com {scanned.TotalDrops} carta(s) a dropar.";
                 break;
             case FarmEvent.Farming farming:
@@ -126,6 +137,7 @@ public partial class FarmViewModel : ObservableObject, IDisposable
             var badges = await _scan(CancellationToken.None);
             var withDrops = badges.Where(b => b.RemainingDrops > 0).ToList();
             UpdateGames(withDrops);
+            UpdateLimitedWarning();
             Summary = PendingSummary();
         }
         catch (Exception error) when (error is SteamSessionExpiredException or SteamAuthException)
@@ -256,7 +268,12 @@ public partial class FarmViewModel : ObservableObject, IDisposable
             }
 
             game.RemainingDrops = badge.RemainingDrops;
-            game.HoursPlayed = badge.HoursPlayed;
+            game.HoursPlayed = Math.Max(game.HoursPlayed, badge.HoursPlayed);
+        }
+
+        if (_loadPosters is not null)
+        {
+            _ = _loadPosters([.. Games]);
         }
 
         var ordered = Games.OrderByDescending(g => g.HoursPlayed).ThenBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
@@ -300,6 +317,11 @@ public partial class FarmViewModel : ObservableObject, IDisposable
             game.Status = game.IsBlacklisted ? Ignored : Waiting;
         }
     }
+
+    private void UpdateLimitedWarning() =>
+        LimitedWarning = _accountLimited() == true
+            ? "Esta conta é limitada (ainda não gastou US$ 5 na Steam), e a Steam não dá cartas para contas limitadas. O farm roda, mas nenhuma carta deve cair."
+            : null;
 
     private string PendingSummary()
     {

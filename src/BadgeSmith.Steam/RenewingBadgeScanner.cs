@@ -9,6 +9,8 @@ public sealed class RenewingBadgeScanner(
     private readonly Func<SteamWebSession, IBadgeScanner> _createScanner = createScanner ?? (session => new BadgeScanner(session));
     private IBadgeScanner? _scanner;
 
+    public bool? AccountLimited => _scanner?.AccountLimited;
+
     public async Task<IReadOnlyList<Badge>> ScanAsync(CancellationToken cancellationToken = default)
     {
         var renewed = false;

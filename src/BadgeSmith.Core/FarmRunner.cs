@@ -30,6 +30,7 @@ public sealed class FarmRunner(
         var scanRetry = options.MinRetry;
         var steamRetry = options.MinRetry;
         var skipped = new HashSet<uint>();
+        var knownHours = new Dictionary<uint, double>();
         try
         {
             while (!cancellationToken.IsCancellationRequested)
@@ -48,7 +49,10 @@ public sealed class FarmRunner(
                     continue;
                 }
 
-                var withDrops = badges.Where(b => b.RemainingDrops > 0).ToList();
+                var withDrops = badges
+                    .Where(b => b.RemainingDrops > 0)
+                    .Select(b => b with { HoursPlayed = knownHours[b.AppId] = Math.Max(b.HoursPlayed, knownHours.GetValueOrDefault(b.AppId)) })
+                    .ToList();
                 var pending = withDrops
                     .Where(b => !options.Blacklist.Contains(b.AppId) && !skipped.Contains(b.AppId))
                     .ToList();
