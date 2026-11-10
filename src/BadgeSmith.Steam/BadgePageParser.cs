@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using AngleSharp.Html.Parser;
 using BadgeSmith.Core;
@@ -9,7 +10,8 @@ public sealed record BadgePage(
     IReadOnlyList<Badge> Badges,
     IReadOnlyList<Badge> WithoutDropInfo,
     int PageCount,
-    ulong? SignedInSteamId);
+    ulong? SignedInSteamId,
+    bool? AccountLimited = null);
 
 public static partial class BadgePageParser
 {
@@ -50,7 +52,7 @@ public static partial class BadgePageParser
             .DefaultIfEmpty(1)
             .Max();
 
-        return new BadgePage(badges, withoutDropInfo, pageCount, ParseSignedInSteamId(html));
+        return new BadgePage(badges, withoutDropInfo, pageCount, ParseSignedInSteamId(html), ParseAccountLimited(document.QuerySelector("[data-userinfo]")?.GetAttribute("data-userinfo")));
     }
 
     public static int? ParseRemainingDrops(string text)
@@ -62,6 +64,28 @@ public static partial class BadgePageParser
 
         var match = DropsRemaining().Match(text);
         return match.Success ? int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture) : null;
+    }
+
+    public static bool? ParseAccountLimited(string? userInfo)
+    {
+        if (string.IsNullOrEmpty(userInfo))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var json = JsonDocument.Parse(userInfo);
+            return json.RootElement.ValueKind == JsonValueKind.Object
+                && json.RootElement.TryGetProperty("is_limited", out var limited)
+                && limited.ValueKind is JsonValueKind.True or JsonValueKind.False
+                    ? limited.GetBoolean()
+                    : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     public static ulong? ParseSignedInSteamId(string html)
