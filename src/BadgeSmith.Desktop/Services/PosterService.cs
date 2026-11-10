@@ -1,28 +1,23 @@
 using Avalonia.Media.Imaging;
+using BadgeSmith.Core;
 using BadgeSmith.Desktop.ViewModels;
 using BadgeSmith.Steam;
 
 namespace BadgeSmith.Desktop.Services;
 
-public sealed class PosterService(StoreAssetsClient? client = null, string? folder = null) : IDisposable
+public sealed class PosterService(StoreAssetsClient? client = null, string? steamRoot = null) : IDisposable
 {
     private readonly StoreAssetsClient _client = client ?? new StoreAssetsClient();
-    private readonly string _folder = folder ?? Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create),
-        "BadgeSmith",
-        "posters");
+    private readonly string? _steamRoot = steamRoot ?? SteamInstall.FindRoot();
 
     public async Task LoadAsync(IReadOnlyList<FarmGameViewModel> games)
     {
         var missing = new List<FarmGameViewModel>();
         foreach (var game in games.Where(g => g.Poster is null))
         {
-            var path = PathFor(game.AppId);
-            if (File.Exists(path) && TryOpen(path) is { } cached)
-            {
-                game.Poster = cached;
-            }
-            else
+            var local = _steamRoot is null ? null : FindLocalPoster(_steamRoot, game.AppId);
+            game.Poster = local is null ? null : TryOpen(() => new Bitmap(local));
+            if (game.Poster is null)
             {
                 missing.Add(game);
             }
@@ -36,37 +31,49 @@ public sealed class PosterService(StoreAssetsClient? client = null, string? fold
         try
         {
             var urls = await _client.GetPosterUrlsAsync(missing.Select(g => g.AppId), CancellationToken.None);
-            Directory.CreateDirectory(_folder);
             foreach (var game in missing)
             {
-                if (!urls.TryGetValue(game.AppId, out var url))
+                if (urls.TryGetValue(game.AppId, out var url))
                 {
-                    continue;
+                    var bytes = await _client.DownloadAsync(url, CancellationToken.None);
+                    game.Poster = TryOpen(() => new Bitmap(new MemoryStream(bytes)));
                 }
-
-                var path = PathFor(game.AppId);
-                await File.WriteAllBytesAsync(path, await _client.DownloadAsync(url, CancellationToken.None));
-                game.Poster = TryOpen(path);
             }
         }
-        catch (Exception error) when (error is HttpRequestException or TaskCanceledException or IOException or System.Text.Json.JsonException)
+        catch (Exception error) when (error is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
         }
     }
 
     public void Dispose() => _client.Dispose();
 
-    private string PathFor(uint appId) => Path.Combine(_folder, $"{appId}.jpg");
+    public static string? FindLocalPoster(string steamRoot, uint appId)
+    {
+        var folder = Path.Combine(steamRoot, "appcache", "librarycache", appId.ToString());
+        if (!Directory.Exists(folder))
+        {
+            return null;
+        }
 
-    private static Bitmap? TryOpen(string path)
+        var poster = Path.Combine(folder, "library_600x900.jpg");
+        if (File.Exists(poster))
+        {
+            return poster;
+        }
+
+        return Directory.EnumerateFiles(folder, "library_capsule.jpg", SearchOption.AllDirectories)
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .FirstOrDefault();
+    }
+
+    private static Bitmap? TryOpen(Func<Bitmap> open)
     {
         try
         {
-            return new Bitmap(path);
+            return open();
         }
         catch (Exception)
         {
-            File.Delete(path);
             return null;
         }
     }
