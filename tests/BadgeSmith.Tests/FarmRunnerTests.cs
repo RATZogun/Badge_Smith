@@ -63,6 +63,24 @@ public class FarmRunnerTests
     }
 
     [Fact]
+    public async Task KeepsTheKnownPlaytimeWhenAScanMissesIt()
+    {
+        var scans = new Queue<IReadOnlyList<Badge>>(
+        [
+            [new Badge(1, "A", 2, 3)],
+            [new Badge(1, "A", 1, 0)],
+            [new Badge(1, "A", 0, 0)],
+        ]);
+        var events = new List<FarmEvent>();
+
+        await RunWithTimeout(new FarmRunner(_ => Task.FromResult(scans.Dequeue()), new FakeLauncher(), Options), events);
+
+        var farmed = events.OfType<FarmEvent.Farming>().ToList();
+        Assert.Equal(2, farmed.Count);
+        Assert.All(farmed, f => Assert.Equal((FarmMode.Solo, 3d), (f.Step.Mode, f.Step.Games[0].HoursPlayed)));
+    }
+
+    [Fact]
     public async Task FinishesWhenNothingIsLeft()
     {
         var events = new List<FarmEvent>();

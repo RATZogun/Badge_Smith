@@ -268,7 +268,7 @@ public partial class FarmViewModel : ObservableObject, IDisposable
             }
 
             game.RemainingDrops = badge.RemainingDrops;
-            game.HoursPlayed = badge.HoursPlayed;
+            game.HoursPlayed = Math.Max(game.HoursPlayed, badge.HoursPlayed);
         }
 
         if (_loadPosters is not null)

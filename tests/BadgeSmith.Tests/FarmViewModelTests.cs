@@ -67,6 +67,19 @@ public sealed class FarmViewModelTests : IDisposable
     }
 
     [Fact]
+    public void NeverLowersThePlaytimeOfAGame()
+    {
+        var farm = NewFarm();
+        Badge[] first = [new(10, "A", 3, 2.5)];
+        Badge[] missing = [new(10, "A", 3, 0)];
+
+        farm.Apply(new FarmEvent.Scanned(first, first));
+        farm.Apply(new FarmEvent.Scanned(missing, missing));
+
+        Assert.Equal(2.5, Assert.Single(farm.Games).HoursPlayed);
+    }
+
+    [Fact]
     public void WarnsWhenTheAccountIsLimited()
     {
         bool? limited = null;
