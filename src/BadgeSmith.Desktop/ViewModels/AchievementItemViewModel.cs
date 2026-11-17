@@ -17,7 +17,6 @@ public partial class AchievementItemViewModel(AchievementState state) : Observab
 
     public string? IconFile { get; } = state.Achieved == true ? state.Icon ?? state.IconGray : state.IconGray ?? state.Icon;
 
-
     public string Name { get; } = state.Name.Length > 0 ? state.Name : state.Api;
 
     public string Description { get; } = state.Hidden && state.Description.Length == 0 ? "Conquista oculta" : state.Description;
