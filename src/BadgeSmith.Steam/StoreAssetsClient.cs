@@ -49,16 +49,19 @@ public sealed class StoreAssetsClient(HttpMessageHandler? handler = null) : IDis
         foreach (var item in items.EnumerateArray())
         {
             if (!item.TryGetProperty("appid", out var appId)
+                || appId.ValueKind != JsonValueKind.Number
+                || !appId.TryGetUInt32(out var id)
                 || !item.TryGetProperty("assets", out var assets)
-                || !assets.TryGetProperty("asset_url_format", out var format))
+                || assets.ValueKind != JsonValueKind.Object
+                || Asset(assets, "asset_url_format") is not { } template)
             {
                 continue;
             }
 
             var file = Asset(assets, "library_capsule") ?? Asset(assets, "header");
-            if (file is not null && format.GetString() is { } template)
+            if (file is not null)
             {
-                posters[appId.GetUInt32()] = AssetHost + template.Replace("${FILENAME}", file, StringComparison.Ordinal);
+                posters[id] = AssetHost + template.Replace("${FILENAME}", file, StringComparison.Ordinal);
             }
         }
 
@@ -66,5 +69,5 @@ public sealed class StoreAssetsClient(HttpMessageHandler? handler = null) : IDis
     }
 
     private static string? Asset(JsonElement assets, string name) =>
-        assets.TryGetProperty(name, out var value) && value.GetString() is { Length: > 0 } file ? file : null;
+        assets.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String && value.GetString() is { Length: > 0 } file ? file : null;
 }
