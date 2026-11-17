@@ -7,8 +7,8 @@ public sealed class PlayTime : IValueConverter
 {
     public static readonly PlayTime Converter = new();
 
-    public static string Format(double hours) => hours < 1
-        ? $"{Math.Round(hours * 60)} min"
+    public static string Format(double hours) => Math.Round(hours * 60) is var minutes && minutes < 60
+        ? $"{minutes} min"
         : $"{hours.ToString("0.0", CultureInfo.CurrentCulture)} h";
 
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>

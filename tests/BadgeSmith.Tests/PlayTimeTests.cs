@@ -9,6 +9,7 @@ public class PlayTimeTests
     [InlineData(0, "0 min")]
     [InlineData(0.4, "24 min")]
     [InlineData(0.9, "54 min")]
+    [InlineData(0.995, "1.0 h")]
     [InlineData(1, "1.0 h")]
     [InlineData(2.14, "2.1 h")]
     public void ShowsMinutesBelowOneHour(double hours, string expected)
