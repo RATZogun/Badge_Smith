@@ -36,9 +36,12 @@ public sealed class OwnedGamesClient(HttpMessageHandler? handler = null) : IDisp
         foreach (var batch in appIds.Distinct().Chunk(ProgressBatchSize))
         {
             var input = $$"""{"steamid":"{{session.SteamId}}","language":"english","appids":[{{string.Join(",", batch)}}]}""";
-            var url = "https://api.steampowered.com/IPlayerService/GetAchievementsProgress/v1/"
-                + $"?access_token={Uri.EscapeDataString(session.AccessToken)}&input_json={Uri.EscapeDataString(input)}";
-            using var response = await _http.PostAsync(url, new StringContent(""), cancellationToken);
+            using var body = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["access_token"] = session.AccessToken,
+                ["input_json"] = input,
+            });
+            using var response = await _http.PostAsync("https://api.steampowered.com/IPlayerService/GetAchievementsProgress/v1/", body, cancellationToken);
             response.EnsureSuccessStatusCode();
             foreach (var (appId, item) in ParseProgress(await response.Content.ReadAsStringAsync(cancellationToken)))
             {
@@ -68,11 +71,19 @@ public sealed class OwnedGamesClient(HttpMessageHandler? handler = null) : IDisp
         foreach (var item in items.EnumerateArray())
         {
             if (item.TryGetProperty("appid", out var appId)
+                && appId.ValueKind == JsonValueKind.Number
+                && appId.TryGetUInt32(out var id)
                 && item.TryGetProperty("total", out var total)
-                && total.GetInt32() > 0)
+                && total.ValueKind == JsonValueKind.Number
+                && total.TryGetInt32(out var count)
+                && count > 0)
             {
-                var unlocked = item.TryGetProperty("unlocked", out var value) ? value.GetInt32() : 0;
-                progress[appId.GetUInt32()] = new AchievementProgress(unlocked, total.GetInt32());
+                var unlocked = item.TryGetProperty("unlocked", out var value)
+                    && value.ValueKind == JsonValueKind.Number
+                    && value.TryGetInt32(out var done)
+                        ? done
+                        : 0;
+                progress[id] = new AchievementProgress(unlocked, count);
             }
         }
 
