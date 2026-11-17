@@ -16,6 +16,8 @@ public sealed class BadgeScanner(SteamWebSession session) : IBadgeScanner
         Timeout = TimeSpan.FromSeconds(30),
     };
 
+    public bool? AccountLimited { get; private set; }
+
     public async Task<IReadOnlyList<Badge>> ScanAsync(CancellationToken cancellationToken = default)
     {
         var badges = new List<Badge>();
@@ -33,6 +35,7 @@ public sealed class BadgeScanner(SteamWebSession session) : IBadgeScanner
             badges.AddRange(result.Badges);
             withoutDropInfo.AddRange(result.WithoutDropInfo);
             pageCount = result.PageCount;
+            AccountLimited = result.AccountLimited ?? AccountLimited;
         }
 
         foreach (var badge in withoutDropInfo)

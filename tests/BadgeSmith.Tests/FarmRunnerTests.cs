@@ -43,8 +43,8 @@ public class FarmRunnerTests
     {
         var scans = new Queue<IReadOnlyList<Badge>>(
         [
-            [new Badge(1, "Falha", 2, 5), new Badge(2, "Novo", 2, 0.5)],
-            [new Badge(1, "Falha", 2, 5), new Badge(2, "Novo", 0, 0.6)],
+            [new Badge(1, "Falha", 2, 0.5), new Badge(2, "Pronto", 2, 5)],
+            [new Badge(1, "Falha", 2, 0.5), new Badge(2, "Pronto", 0, 5.2)],
         ]);
         var launcher = new FakeLauncher(failing: 1);
         var events = new List<FarmEvent>();
@@ -60,6 +60,24 @@ public class FarmRunnerTests
             e => Assert.Equal([1u], Assert.IsType<FarmEvent.Finished>(e).Skipped));
         Assert.Empty(scans);
         Assert.Equal(1, launcher.StopCalls);
+    }
+
+    [Fact]
+    public async Task KeepsTheKnownPlaytimeWhenAScanMissesIt()
+    {
+        var scans = new Queue<IReadOnlyList<Badge>>(
+        [
+            [new Badge(1, "A", 2, 3)],
+            [new Badge(1, "A", 1, 0)],
+            [new Badge(1, "A", 0, 0)],
+        ]);
+        var events = new List<FarmEvent>();
+
+        await RunWithTimeout(new FarmRunner(_ => Task.FromResult(scans.Dequeue()), new FakeLauncher(), Options), events);
+
+        var farmed = events.OfType<FarmEvent.Farming>().ToList();
+        Assert.Equal(2, farmed.Count);
+        Assert.All(farmed, f => Assert.Equal((FarmMode.Solo, 3d), (f.Step.Mode, f.Step.Games[0].HoursPlayed)));
     }
 
     [Fact]

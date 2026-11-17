@@ -104,4 +104,23 @@ public class BadgePageParserTests
     {
         Assert.Equal(expected, BadgePageParser.ParseRemainingDrops(text));
     }
+
+    [Theory]
+    [InlineData("""{"logged_in":true,"is_limited":true}""", true)]
+    [InlineData("""{"logged_in":true,"is_limited":false}""", false)]
+    [InlineData("""{"logged_in":false}""", null)]
+    [InlineData("não é json", null)]
+    [InlineData(null, null)]
+    public void ReadsWhetherTheAccountIsLimited(string? userInfo, bool? limited)
+    {
+        Assert.Equal(limited, BadgePageParser.ParseAccountLimited(userInfo));
+    }
+
+    [Fact]
+    public void ReadsTheLimitedFlagFromTheBadgePage()
+    {
+        const string html = """<html><body><div id="application_config" data-userinfo="{&quot;is_limited&quot;:true}"></div></body></html>""";
+
+        Assert.True(BadgePageParser.Parse(html).AccountLimited);
+    }
 }

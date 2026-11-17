@@ -3,6 +3,7 @@ using BadgeSmith.Steam;
 using QRCoder;
 
 const string CookieVariable = "BADGESMITH_STEAM_LOGIN_SECURE";
+const string LimitedWarning = "Atenção: esta conta é limitada (ainda não gastou US$ 5 na Steam) e a Steam não dá cartas para contas limitadas. O farm roda, mas nenhuma carta deve cair.";
 
 var command = args.FirstOrDefault();
 if (command is not ("login" or "logout" or "scan" or "farm"))
@@ -69,6 +70,11 @@ try
     if (command == "scan")
     {
         var badges = await scanner.ScanAsync(cancel.Token);
+        if (scanner.AccountLimited == true)
+        {
+            Console.Error.WriteLine(LimitedWarning);
+        }
+
         var pending = badges.Where(b => b.RemainingDrops > 0).OrderByDescending(b => b.HoursPlayed).ToList();
         foreach (var b in pending)
         {
@@ -92,7 +98,16 @@ try
 
     await using var launcher = new AgentLauncher(agentPath, steamId);
     var runner = new FarmRunner(scanner.ScanAsync, launcher, options);
-    await runner.RunAsync(Report, cancel.Token);
+    var warned = false;
+    await runner.RunAsync(e =>
+    {
+        Report(e);
+        if (!warned && e is FarmEvent.Scanned && scanner.AccountLimited == true)
+        {
+            warned = true;
+            Console.Error.WriteLine(LimitedWarning);
+        }
+    }, cancel.Token);
     return 0;
 }
 catch (Exception error) when (error is SteamSessionExpiredException or SteamAuthException or SessionVaultException)

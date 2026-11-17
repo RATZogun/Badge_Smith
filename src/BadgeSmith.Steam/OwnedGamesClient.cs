@@ -2,10 +2,14 @@ using System.Text.Json;
 
 namespace BadgeSmith.Steam;
 
-public sealed record OwnedGame(uint AppId, string Name, double HoursPlayed, bool HasAchievements);
+public sealed record OwnedGame(uint AppId, string Name, double HoursPlayed, bool HasAchievements, string? IconHash = null);
+
+public sealed record AchievementProgress(int Unlocked, int Total);
 
 public sealed class OwnedGamesClient(HttpMessageHandler? handler = null) : IDisposable
 {
+    private const int ProgressBatchSize = 50;
+
     private readonly HttpClient _http = new(handler ?? new HttpClientHandler()) { Timeout = TimeSpan.FromSeconds(30) };
 
     public async Task<IReadOnlyList<OwnedGame>> GetAsync(SteamWebSession session, CancellationToken cancellationToken)
@@ -23,7 +27,68 @@ public sealed class OwnedGamesClient(HttpMessageHandler? handler = null) : IDisp
         return Parse(await response.Content.ReadAsStringAsync(cancellationToken));
     }
 
+    public async Task<IReadOnlyDictionary<uint, AchievementProgress>> GetAchievementProgressAsync(
+        SteamWebSession session,
+        IEnumerable<uint> appIds,
+        CancellationToken cancellationToken)
+    {
+        var progress = new Dictionary<uint, AchievementProgress>();
+        foreach (var batch in appIds.Distinct().Chunk(ProgressBatchSize))
+        {
+            var input = $$"""{"steamid":"{{session.SteamId}}","language":"english","appids":[{{string.Join(",", batch)}}]}""";
+            using var body = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["access_token"] = session.AccessToken,
+                ["input_json"] = input,
+            });
+            using var response = await _http.PostAsync("https://api.steampowered.com/IPlayerService/GetAchievementsProgress/v1/", body, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            foreach (var (appId, item) in ParseProgress(await response.Content.ReadAsStringAsync(cancellationToken)))
+            {
+                progress[appId] = item;
+            }
+        }
+
+        return progress;
+    }
+
     public void Dispose() => _http.Dispose();
+
+    public static string IconUrl(uint appId, string iconHash) =>
+        $"https://media.steampowered.com/steamcommunity/public/images/apps/{appId}/{iconHash}.jpg";
+
+    public static IReadOnlyDictionary<uint, AchievementProgress> ParseProgress(string json)
+    {
+        var progress = new Dictionary<uint, AchievementProgress>();
+        using var document = JsonDocument.Parse(json);
+        if (!document.RootElement.TryGetProperty("response", out var response)
+            || !response.TryGetProperty("achievement_progress", out var items)
+            || items.ValueKind != JsonValueKind.Array)
+        {
+            return progress;
+        }
+
+        foreach (var item in items.EnumerateArray())
+        {
+            if (item.TryGetProperty("appid", out var appId)
+                && appId.ValueKind == JsonValueKind.Number
+                && appId.TryGetUInt32(out var id)
+                && item.TryGetProperty("total", out var total)
+                && total.ValueKind == JsonValueKind.Number
+                && total.TryGetInt32(out var count)
+                && count > 0)
+            {
+                var unlocked = item.TryGetProperty("unlocked", out var value)
+                    && value.ValueKind == JsonValueKind.Number
+                    && value.TryGetInt32(out var done)
+                        ? done
+                        : 0;
+                progress[id] = new AchievementProgress(unlocked, count);
+            }
+        }
+
+        return progress;
+    }
 
     public static IReadOnlyList<OwnedGame> Parse(string json)
     {
@@ -40,7 +105,8 @@ public sealed class OwnedGamesClient(HttpMessageHandler? handler = null) : IDisp
                 g.GetProperty("appid").GetUInt32(),
                 g.TryGetProperty("name", out var name) ? name.GetString() ?? "" : "",
                 g.TryGetProperty("playtime_forever", out var minutes) ? minutes.GetInt32() / 60.0 : 0,
-                g.TryGetProperty("has_community_visible_stats", out var stats) && stats.ValueKind == JsonValueKind.True))
+                g.TryGetProperty("has_community_visible_stats", out var stats) && stats.ValueKind == JsonValueKind.True,
+                g.TryGetProperty("img_icon_url", out var icon) && icon.GetString() is { Length: > 0 } hash ? hash : null))
             .OrderBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
     }

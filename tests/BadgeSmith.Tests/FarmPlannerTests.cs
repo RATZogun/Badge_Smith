@@ -15,16 +15,28 @@ public class FarmPlannerTests
     }
 
     [Fact]
-    public void FarmsTheMostPlayedReadyGameAlone()
+    public void FarmsTheMostPlayedReadyGameAloneOnceNoYoungGameIsLeft()
     {
         var step = FarmPlanner.Next(
-            [new Badge(1, "Novo", 3, 0.5), new Badge(2, "Pronto", 4, 2.5), new Badge(3, "Mais jogado", 2, 8)],
+            [new Badge(2, "Pronto", 4, 2.5), new Badge(3, "Mais jogado", 2, 8)],
             Options);
 
         Assert.NotNull(step);
         Assert.Equal(FarmMode.Solo, step.Mode);
         Assert.Equal(3u, Assert.Single(step.Games).AppId);
         Assert.Equal(Options.SoloDuration, step.Duration);
+    }
+
+    [Fact]
+    public void BatchesTheYoungGamesBeforeTheReadyOnes()
+    {
+        var step = FarmPlanner.Next(
+            [new Badge(1, "Novo", 3, 0.5), new Badge(2, "Pronto", 4, 2.5), new Badge(3, "Quase", 2, 1.5)],
+            Options);
+
+        Assert.NotNull(step);
+        Assert.Equal(FarmMode.Batch, step.Mode);
+        Assert.Equal([3u, 1u], step.Games.Select(g => g.AppId));
     }
 
     [Fact]

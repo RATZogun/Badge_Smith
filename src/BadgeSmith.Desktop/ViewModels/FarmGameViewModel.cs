@@ -1,3 +1,4 @@
+using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace BadgeSmith.Desktop.ViewModels;
@@ -18,6 +19,9 @@ public partial class FarmGameViewModel(uint appId, string name, bool blacklisted
 
     [ObservableProperty]
     private bool _canChangeBlacklist = true;
+
+    [ObservableProperty]
+    private Bitmap? _poster;
 
     public uint AppId { get; } = appId;
 

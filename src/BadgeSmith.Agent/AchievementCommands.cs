@@ -58,6 +58,8 @@ internal static class AchievementCommands
                 definition.Description,
                 definition.Hidden,
                 definition.Protected,
+                definition.Icon,
+                definition.IconGray,
                 achieved = state?.Achieved,
                 unlockTime = state is { Achieved: true, UnlockTime: > 0 } s ? DateTimeOffset.FromUnixTimeSeconds(s.UnlockTime) : (DateTimeOffset?)null,
             });
