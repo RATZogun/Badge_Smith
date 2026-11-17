@@ -12,39 +12,29 @@ public sealed class PosterService(StoreAssetsClient? client = null, string? stea
     private readonly StoreAssetsClient _client = client ?? new StoreAssetsClient();
     private readonly AchievementIconClient _achievementIcons = achievementIcons ?? new AchievementIconClient();
     private readonly string? _steamRoot = steamRoot ?? SteamInstall.FindRoot();
+    private readonly HashSet<uint> _loading = [];
+    private readonly HashSet<uint> _withoutPoster = [];
 
     public async Task LoadAsync(IReadOnlyList<FarmGameViewModel> games)
     {
-        var missing = new List<FarmGameViewModel>();
-        foreach (var game in games.Where(g => g.Poster is null))
+        List<FarmGameViewModel> claimed;
+        lock (_loading)
         {
-            var local = _steamRoot is null ? null : FindLocalPoster(_steamRoot, game.AppId);
-            game.Poster = local is null ? null : TryOpen(() => new Bitmap(local));
-            if (game.Poster is null)
-            {
-                missing.Add(game);
-            }
-        }
-
-        if (missing.Count == 0)
-        {
-            return;
+            claimed = games
+                .Where(g => g.Poster is null && !_withoutPoster.Contains(g.AppId) && _loading.Add(g.AppId))
+                .ToList();
         }
 
         try
         {
-            var urls = await _client.GetPosterUrlsAsync(missing.Select(g => g.AppId), CancellationToken.None);
-            foreach (var game in missing)
-            {
-                if (urls.TryGetValue(game.AppId, out var url))
-                {
-                    var bytes = await _client.DownloadAsync(url, CancellationToken.None);
-                    game.Poster = TryOpen(() => new Bitmap(new MemoryStream(bytes)));
-                }
-            }
+            await LoadClaimedAsync(claimed);
         }
-        catch (Exception error) when (error is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        finally
         {
+            lock (_loading)
+            {
+                _loading.ExceptWith(claimed.Select(g => g.AppId));
+            }
         }
     }
 
@@ -64,7 +54,7 @@ public sealed class PosterService(StoreAssetsClient? client = null, string? stea
                 var bytes = await _client.DownloadAsync(OwnedGamesClient.IconUrl(game.AppId, game.IconHash!), CancellationToken.None);
                 game.Icon = TryOpen(() => new Bitmap(new MemoryStream(bytes)));
             }
-            catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
+            catch (Exception error) when (IsUnavailable(error))
             {
             }
         }
@@ -81,7 +71,7 @@ public sealed class PosterService(StoreAssetsClient? client = null, string? stea
                 var bytes = await _achievementIcons.DownloadAsync(appId, item.IconFile!, CancellationToken.None);
                 item.Icon = TryOpen(() => new Bitmap(new MemoryStream(bytes)));
             }
-            catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
+            catch (Exception error) when (IsUnavailable(error))
             {
             }
             finally
@@ -115,6 +105,60 @@ public sealed class PosterService(StoreAssetsClient? client = null, string? stea
             .OrderByDescending(File.GetLastWriteTimeUtc)
             .FirstOrDefault();
     }
+
+    private async Task LoadClaimedAsync(List<FarmGameViewModel> games)
+    {
+        var missing = new List<FarmGameViewModel>();
+        foreach (var game in games)
+        {
+            var local = _steamRoot is null ? null : FindLocalPoster(_steamRoot, game.AppId);
+            game.Poster = local is null ? null : TryOpen(() => new Bitmap(local));
+            if (game.Poster is null)
+            {
+                missing.Add(game);
+            }
+        }
+
+        if (missing.Count == 0)
+        {
+            return;
+        }
+
+        IReadOnlyDictionary<uint, string> urls;
+        try
+        {
+            urls = await _client.GetPosterUrlsAsync(missing.Select(g => g.AppId), CancellationToken.None);
+        }
+        catch (Exception error) when (IsUnavailable(error))
+        {
+            return;
+        }
+
+        foreach (var game in missing)
+        {
+            if (!urls.TryGetValue(game.AppId, out var url))
+            {
+                lock (_loading)
+                {
+                    _withoutPoster.Add(game.AppId);
+                }
+
+                continue;
+            }
+
+            try
+            {
+                var bytes = await _client.DownloadAsync(url, CancellationToken.None);
+                game.Poster = TryOpen(() => new Bitmap(new MemoryStream(bytes)));
+            }
+            catch (Exception error) when (IsUnavailable(error))
+            {
+            }
+        }
+    }
+
+    private static bool IsUnavailable(Exception error) =>
+        error is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or InvalidOperationException;
 
     private static Bitmap? TryOpen(Func<Bitmap> open)
     {
