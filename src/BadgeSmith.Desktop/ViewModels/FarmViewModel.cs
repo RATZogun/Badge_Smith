@@ -252,6 +252,9 @@ public partial class FarmViewModel : ObservableObject, IDisposable
         foreach (var gone in Games.Where(g => !byId.ContainsKey(g.AppId)).ToList())
         {
             Games.Remove(gone);
+            var poster = gone.Poster;
+            gone.Poster = null;
+            poster?.Dispose();
         }
 
         foreach (var badge in badges.OrderByDescending(b => b.HoursPlayed).ThenBy(b => b.Name, StringComparer.CurrentCultureIgnoreCase))
