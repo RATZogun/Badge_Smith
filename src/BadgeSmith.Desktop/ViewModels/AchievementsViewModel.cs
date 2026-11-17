@@ -70,8 +70,16 @@ public partial class AchievementsViewModel : ObservableObject
         GamesSummary = "Carregando a biblioteca...";
         try
         {
+            var previous = _allGames;
             _allGames = (await _loadGames(CancellationToken.None)).Where(g => g.HasAchievements).Select(g => new GameItemViewModel(g)).ToList();
             ApplyFilter();
+            foreach (var game in previous.Where(g => !Games.Contains(g)))
+            {
+                var icon = game.Icon;
+                game.Icon = null;
+                icon?.Dispose();
+            }
+
             _ = LoadDetailsAsync(_allGames);
         }
         catch (Exception error) when (error is SteamSessionExpiredException or SteamAuthException)
@@ -95,7 +103,7 @@ public partial class AchievementsViewModel : ObservableObject
 
     partial void OnSelectedGameChanged(GameItemViewModel? value)
     {
-        Achievements.Clear();
+        ClearAchievements();
         Message = null;
         if (value is not null)
         {
@@ -186,11 +194,23 @@ public partial class AchievementsViewModel : ObservableObject
             var progress = await _loadProgress([.. games.Select(g => g.AppId)]);
             foreach (var game in games)
             {
-                game.Progress = progress.GetValueOrDefault(game.AppId) ?? game.Progress;
+                game.Progress ??= progress.GetValueOrDefault(game.AppId);
             }
         }
         catch (Exception)
         {
+        }
+    }
+
+    private void ClearAchievements()
+    {
+        var removed = Achievements.ToList();
+        Achievements.Clear();
+        foreach (var item in removed)
+        {
+            var icon = item.Icon;
+            item.Icon = null;
+            icon?.Dispose();
         }
     }
 
@@ -208,7 +228,7 @@ public partial class AchievementsViewModel : ObservableObject
                 return;
             }
 
-            Achievements.Clear();
+            ClearAchievements();
             foreach (var achievement in achievements)
             {
                 Achievements.Add(new AchievementItemViewModel(achievement));
